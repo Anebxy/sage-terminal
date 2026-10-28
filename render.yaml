@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: sage-terminal
+    runtime: docker
+    plan: free
+    healthCheckPath: /healthz
+    envVars:
+      - key: DASH_PASSWORD
+        sync: false
+      - key: DATA_DIR
+        value: /data   # free plan has no persistent disk; add a disk (paid) mounted at /data to persist

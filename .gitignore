@@ -1,0 +1,8 @@
+.dash_password
+*.db
+*.db-*
+__pycache__/
+.w
+status_latest.txt
+daily_summary.txt
+*.log
