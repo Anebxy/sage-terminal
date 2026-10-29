@@ -128,7 +128,7 @@ def on_curve(mint,b64):
     STATS["trades"]+=1;vs/=1e9;mc=vs/(vt/1e6)*1e9 if vt else t["mcap_sol"];age=time.time()-t["born"]
     if vs<25 or vs>200 or mc>20*max(t["mcap_sol"],28):t["badcurve"]=True;return   # non-standard curve layout (e.g. non-SOL quote); ignore
     if vs>t["vsol"]+1e-9:
-        t["buys"]+=1;t["inflow"]=t.get("inflow",0)+(vs-t["vsol"])
+        t["buys"]+=1;t["last_buy"]=time.time();t["inflow"]=t.get("inflow",0)+(vs-t["vsol"])
         if age<=CFG()["sniper_window_s"]:t["early"]+=100*max(0,(t.get("vtok",vt)-vt))/1e15
     elif vs<t["vsol"]-1e-9:t["sells"]+=1
     t["vsol"]=vs;t["vtok"]=vt;t["mcap_sol"]=mc;t["peak_mcap"]=max(t["peak_mcap"],mc);t["graduated"]=done
@@ -147,7 +147,7 @@ async def scout_loop():
             if t["stage"]!="new":continue
             age=time.time()-t["born"]
             if t["dev_sold"]:t["stage"]="dead";sc.say("INFO",f"${t['sym']} dev sold within {age:.0f}s - dropped",mint,t["sym"]);drop.append(mint);continue
-            if age>=c["min_watch_s"] and t["buys"]>=c["min_buys"] and t["mcap_sol"]>=c["min_mcap_sol"]:
+            if age>=c["min_watch_s"] and t["buys"]>=c["min_buys"] and t["mcap_sol"]>=c["min_mcap_sol"] and t.get("inflow",0)>=c.get("min_inflow_sol",0) and t["buys"]>=c.get("min_buy_sell_ratio",0)*max(t["sells"],1) and time.time()-t.get("last_buy",0)<=c.get("fresh_buy_s",1e9):
                 t["stage"]="candidate";STATS["candidates"]+=1;sc.busy(f"${t['sym']} candidate")
                 sc.say("SCAN",f"${t['sym']} momentum: {t['buys']} buys/{t['sells']} sells, +{t.get('inflow',0):.1f} SOL in, mcap {t['mcap_sol']:.0f} SOL in {age:.0f}s -> candidate",mint,t["sym"])
                 sc.send(A["RUG GUARD"],("deep",mint))
@@ -167,7 +167,7 @@ async def rug_worker(i):
         if kind=="fast":
             g.busy(f"w{i}: dev/creator check ${t['sym']}")
             if t["dev_pct"]>c["max_dev_pct"]:t["rug"]=f"dev bought {t['dev_pct']:.0f}%";t["stage"]="rejected";g.say("WARN",f"${t['sym']} dev wallet {t['dev_pct']:.0f}% - skipped",mint,t["sym"]);rej(t,"RUG GUARD",t["rug"])
-            elif DEVS[t["creator"]]>c["max_dev_launches_session"]:t["rug"]=f"dev launched {DEVS[t['creator']]} tokens this session";t["stage"]="rejected";g.say("WARN",f"${t['sym']} serial launcher ({DEVS[t['creator']]} coins seen from this dev) - skipped",mint,t["sym"]);rej(t,"RUG GUARD",t["rug"])
+            elif DEVS[t["creator"]]>c["max_dev_launches_session"] and not c.get("soft_rug_warn_only"):t["rug"]=f"dev launched {DEVS[t['creator']]} tokens this session";t["stage"]="rejected";g.say("WARN",f"${t['sym']} serial launcher ({DEVS[t['creator']]} coins seen from this dev) - skipped",mint,t["sym"]);rej(t,"RUG GUARD",t["rug"])
             continue
         g.busy(f"w{i}: RugCheck + snipers ${t['sym']}")
         if t["early"]>c["max_sniper_pct"]:t["rug"]=f"snipers {t['early']:.0f}%";t["stage"]="rejected";g.say("WARN",f"${t['sym']} first-{c['sniper_window_s']}s snipers hold {t['early']:.0f}% - skipped",mint,t["sym"]);rej(t,"RUG GUARD",t["rug"]);continue
@@ -181,8 +181,11 @@ async def rug_worker(i):
             elif r.get("freezeAuthority"):why="freeze authority not revoked"
             else:
                 ct=[x for x in r.get("creatorTokens") or [] if x.get("mint")!=mint];dead=[x for x in ct if (x.get("marketCap") or 0)<5000]
-                if len(ct)>=3 and len(dead)>=0.8*len(ct):why=f"dev has {len(ct)} prior tokens, {len(dead)} dead"
-                elif (r.get("graphInsidersDetected") or 0)>=5:why=f"insider network ({r['graphInsidersDetected']})"
+                soft=None
+                if len(ct)>=3 and len(dead)>=0.8*len(ct):soft=f"dev has {len(ct)} prior tokens, {len(dead)} dead"
+                elif (r.get("graphInsidersDetected") or 0)>=5:soft=f"insider network ({r['graphInsidersDetected']})"
+                if soft and c.get("soft_rug_warn_only"):t["rug_warn"]=soft;g.say("WARN",f"${t['sym']} {soft} - soft warning, not a kill ({c['profile']})",mint,t["sym"])
+                elif soft:why=soft
         else:why=None if c["rugcheck_optional_for_new"] else "RugCheck unavailable"
         if why:t["rug"]=why;t["stage"]="rejected";g.say("WARN",f"${t['sym']} {why} - skipped",mint,t["sym"]);rej(t,"RUG GUARD",why);continue
         t["rug"]="ok";g.say("INFO",f"rug check ${t['sym']} clean: dev {t.get('dev_now_pct',t['dev_pct']):.1f}% (on-chain), snipers {t['early']:.0f}%"+("" if r else ", RugCheck not indexed yet"),mint,t["sym"])
@@ -260,7 +263,7 @@ def day_pnl():
 def risk_check(t):
     c=CFG();cash,op,eq=portfolio();dp,base=day_pnl()
     if c["kill_switch"] or os.path.exists(f"{DATA}/KILL"):return "kill switch on"
-    if dp>=c["daily_target_pct"]*base:return f"daily target reached (+${dp:.2f})"
+    if c.get("daily_target_stop",True) and dp>=c["daily_target_pct"]*base:return f"daily target reached (+${dp:.2f})"
     if dp<=-c["daily_loss_limit_pct"]*base:return f"daily loss limit hit (${dp:.2f})"
     if len(op)>=c["max_open"]:return f"max {c['max_open']} open positions"
     if any(p["mint"]==t["mint"] for p in op):return "already holding"
@@ -286,10 +289,13 @@ async def trader():
         if kind=="tick":await manage(t);continue
         tr.busy(f"evaluate ${t['sym']}")
         if t.get("social") is None and not t.get("pending_social"):t["pending_social"]=True;continue
+        if not c["require_socials"] and not t.get("social_ok"):tr.say("INFO",f"${t['sym']} weak socials ({t.get('social')}) - penalty only ({c['profile']})",mint,t["sym"])
         if c["require_socials"] and not t.get("social_ok"):t["stage"]="rejected";tr.say("WARN",f"${t['sym']} no real X/site ({t.get('social')}) - skipped",mint,t["sym"]);rej(t,"SOCIAL","weak socials");continue
         age=time.time()-t["born"];up=t["mcap_sol"]/max(t.get("cand_mcap") or t["mcap_sol"],1)
         if t.get("graduated"):t["stage"]="rejected";tr.say("WARN",f"${t['sym']} already graduated - skipped",mint,t["sym"]);rej(t,"TRADER","graduated");continue
         if t["dev_sold"]:t["stage"]="rejected";tr.say("WARN",f"${t['sym']} dev sold - skipped",mint,t["sym"]);rej(t,"TRADER","dev sold");continue
+        if t["mcap_sol"]<c.get("min_from_peak",0)*t["peak_mcap"]:t["stage"]="rejected";tr.say("WARN",f"${t['sym']} already dumping ({t['mcap_sol']:.0f} vs peak {t['peak_mcap']:.0f} SOL) - skipped",mint,t["sym"]);rej(t,"TRADER","dumping from peak");continue
+        if t.get("inflow",0)/max(t["buys"],1)>c.get("max_avg_buy_sol",1e9):t["stage"]="rejected";tr.say("WARN",f"${t['sym']} inflow is whale-driven ({t.get('inflow',0)/max(t['buys'],1):.1f} SOL/buy) - skipped",mint,t["sym"]);rej(t,"TRADER","whale-driven");continue
         if t["mcap_sol"]>c["max_entry_mcap_sol"]:t["stage"]="rejected";tr.say("WARN",f"${t['sym']} too late: mcap {t['mcap_sol']:.0f} SOL > {c['max_entry_mcap_sol']}",mint,t["sym"]);rej(t,"TRADER","late");continue
         fut=asyncio.get_running_loop().create_future();tr.send(A["RISK"],(mint,fut));v=await fut
         if v:t["stage"]="vetoed";rej(t,"RISK",v);continue
@@ -310,6 +316,7 @@ async def manage(t):
     if t["dev_sold"]:why="dev wallet sold"
     elif r<=c["stop_loss"]:why=f"stop {r:.0%}"
     elif p["tp"]>0 and pr<=peak*(1-c["trail_pct"]):why=f"trailing stop {r:+.0%}"
+    elif age>=c.get("fade_after_s",1e9) and r<c.get("fade_min_r",0) and time.time()-t.get("last_buy",0)>c.get("fade_no_buy_s",1e9):why=f"momentum faded {r:+.0%}"
     elif age>=c["max_hold_s"]:why=f"time exit {age/60:.0f}m {r:+.0%}"
     elif p["tp"]<len(c["tp_ladder"]) and r>=c["tp_ladder"][p["tp"]][0]:why=f"TP{p['tp']+1} +{r:.0%}";frac=c["tp_ladder"][p["tp"]][1];db.execute("update positions set tp=tp+1 where id=?",(p["id"],))
     if not why:db.commit();return
@@ -346,7 +353,7 @@ def stats():
     w=sum(1 for p in cl if p["proceeds"]>p["cost"]);dp,base=day_pnl()
     return dict(start=c["start_equity"],equity=round(eq,2),pnl=round(eq-c["start_equity"],2),wins=w,losses=len(cl)-w,open=len(op),day_pnl=round(dp,2),day_target=round(c["daily_target_pct"]*base,2),
         tasks=TASKS(),resolved=STATS["rejected"]+STATS["faded"]+STATS["traded"],seen=STATS["seen"],trades=STATS["trades"],candidates=STATS["candidates"],uptime=int(time.time()-START),sol=SOL[0],
-        rpc=bool(RPCWS[0]),lat_ms=round(sorted(LAT)[len(LAT)//2],2) if LAT else None,ws=bool(WS[0]),watching=sum(1 for t in TOK.values() if t.get("watch")),sub=c["subscription"])
+        rpc=bool(RPCWS[0]),lat_ms=round(sorted(LAT)[len(LAT)//2],2) if LAT else None,ws=bool(WS[0]),watching=sum(1 for t in TOK.values() if t.get("watch")),sub=c["subscription"],profile=c.get("profile","DEFAULT"))
 def snapshot():
     return dict(stats=stats(),agents=[a.view() for a in A.values()],server_now=time.time(),
         equity=[list(r) for r in db.execute("select ts,equity from (select ts,equity from equity order by ts desc limit 1500) order by ts")],
