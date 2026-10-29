@@ -25,7 +25,17 @@ def init():
     c=db();c.executescript("""create table if not exists events(id integer primary key,ts text,kind text,data text);
     create table if not exists signals(id integer primary key,ts text,token text,symbol text,pair text,source text,liq real,score real,status text,reason text);
     create table if not exists positions(id integer primary key,token text,symbol text,pair text,opened text,closed text,entry real,qty real,cost real,peak real,last real,remaining real,proceeds real default 0,fees real default 0,status text,exit_reason text,tp_hit int default 0);
-    create table if not exists equity(ts text,equity real,cash real);""");c.commit()
+    create table if not exists equity(ts text,equity real,cash real);""");c.commit();migrate()
+SEATS={k:dict(status="idle",line="",ts="",n=0) for k in ["SCOUT","FILTER","ANALYST","JUDGE","WHALE","SIZER","EXECUTOR","GUARD","LOGGER"]}
+SEATS["WHALE"]["line"]="large trades (>=$1k) from GeckoTerminal public trades"
+def seat(k,status,line):
+    x=SEATS[k];x.update(status=status,line=str(line)[:160],ts=now());x["n"]+=1
+def migrate():
+    c=db()
+    for t,col in [("signals","judge text"),("signals","analyst real"),("positions","entry_reason text"),("positions","stop real")]:
+        try:c.execute(f"alter table {t} add column {col}")
+        except Exception:pass
+    c.commit()
 def now():return dt.datetime.now().isoformat(timespec="seconds")
 _conn=None
 def log(kind,data):
@@ -49,7 +59,8 @@ def pairs_for(tokens):
             if a in tokens and (a not in res or (p.get("liquidity") or {}).get("usd",0)>(res[a].get("liquidity") or {}).get("usd",0)):res[a]=p
     return res
 # ---------- rug filter ----------
-def rug(addr,p,cfg):
+def rug(addr,p,cfg,F=None):
+    F=F if F is not None else {}
     liq=(p.get("liquidity") or {}).get("usd",0) or 0
     if liq<cfg["min_liq"]:return f"liquidity ${liq:,.0f} < ${cfg['min_liq']:,}"
     ch=(p.get("priceChange") or {}).get("h1",0) or 0
@@ -64,12 +75,12 @@ def rug(addr,p,cfg):
         for k in ("pubkey","liquidityA","liquidityB","liquidityAAccount","liquidityBAccount"):
             if isinstance(m.get(k),str):mk.add(m[k])
     hs=[h for h in r.get("topHolders") or [] if h.get("owner") not in known and h.get("address") not in known and h.get("owner") not in mk and h.get("address") not in mk]
-    top10=sum(h.get("pct",0) for h in hs[:10])
+    top10=sum(h.get("pct",0) for h in hs[:10]);F["top10"]=top10
     if top10>cfg["max_top10_pct"]:return f"top10 holders {top10:.1f}% > {cfg['max_top10_pct']}%"
     sup=(r.get("token") or {}).get("supply") or 0;dec=(r.get("token") or {}).get("decimals") or 0
-    dev=100*(r.get("creatorBalance") or 0)/sup if sup else 0
+    dev=100*(r.get("creatorBalance") or 0)/sup if sup else 0;F["dev"]=dev
     if dev>cfg["max_dev_pct"]:return f"dev holds {dev:.1f}% > {cfg['max_dev_pct']}%"
-    lp=max([(m.get("lp") or {}).get("lpLockedPct",0) or 0 for m in r.get("markets") or []]+[0])
+    lp=max([(m.get("lp") or {}).get("lpLockedPct",0) or 0 for m in r.get("markets") or []]+[0]);F["lp"]=lp;F["insiders"]=r.get("graphInsidersDetected",0) or 0
     if lp<cfg["require_lp_locked_pct"]:return f"LP locked {lp:.0f}% < {cfg['require_lp_locked_pct']}%"
     if r.get("graphInsidersDetected",0)>=5:return f"insider/bundle network detected ({r['graphInsidersDetected']})"
     for k in r.get("risks") or []:
@@ -85,6 +96,33 @@ def score(p):
     age=(time.time()*1000-(p.get("pairCreatedAt") or 0))/3.6e6
     ag=20 if 0.25<=age<=24 else 10 if age<=72 else 0
     return round(max(0,mom)+max(0,bs)+lq+ag,1),dict(mom=round(mom,1),bs=round(bs,1),liq=round(lq,1),age_h=round(age,1))
+# ---------- WHALE: large trades from GeckoTerminal public trades (no key) ----------
+def whale(p,min_usd=1000):
+    pool=p.get("pairAddress")
+    g=get(f"https://api.geckoterminal.com/api/v2/networks/solana/pools/{pool}/trades",2.5) if pool else None
+    if not g or "data" not in g:return None
+    buys=sells=0.0;nb=ns=0;w=set()
+    for t in g["data"]:
+        a=t.get("attributes",{});u=float(a.get("volume_in_usd") or 0)
+        if u<min_usd:continue
+        w.add(a.get("tx_from_address"))
+        if a.get("kind")=="buy":buys+=u;nb+=1
+        else:sells+=u;ns+=1
+    return dict(buy_usd=round(buys),sell_usd=round(sells),n_buys=nb,n_sells=ns,wallets=len(w),sample=len(g["data"]))
+# ---------- JUDGE: deterministic closed-question gate ----------
+cl01=lambda x:max(0.0,min(1.0,x))
+def judge(p,F,W,cfg):
+    liq=(p.get("liquidity") or {}).get("usd",0) or 0;fdv=p.get("fdv") or p.get("marketCap") or 0
+    tx=(p.get("txns") or {}).get("h1",{});b,sl=tx.get("buys",0),tx.get("sells",0);h1=(p.get("priceChange") or {}).get("h1",0) or 0
+    lr=liq/fdv if fdv else 0
+    Q=[("Liquidity healthy?",cl01(0.5*liq/100000+0.5*lr/0.15),f"liq ${liq:,.0f}, liq/mcap {lr:.0%}"),
+       ("Holder concentration safe?",cl01(1-F.get("top10",50)/50),f"top10 {F.get('top10',0):.1f}%"),
+       ("Momentum real, not late?",cl01((b/max(b+sl,1)-0.4)/0.25)*cl01(1-max(0,h1-40)/60),f"buys {b}/sells {sl} 1h, {h1:+.0f}% 1h"),
+       ("Dev risk low?",cl01(1-F.get("dev",0)/8-F.get("insiders",0)/10),f"dev {F.get('dev',0):.1f}%, insiders {F.get('insiders',0)}")]
+    if W and W["n_buys"]+W["n_sells"]>0:
+        Q.append(("Large trades net buying?",cl01(0.5+(W["buy_usd"]-W["sell_usd"])/max(W["buy_usd"]+W["sell_usd"],1)/2),f"${W['buy_usd']:,} in / ${W['sell_usd']:,} out"))
+    pr=sum(q[1] for q in Q)/len(Q);ok=pr>=cfg.get("judge_threshold",0.6) and min(q[1] for q in Q)>=0.3
+    return dict(verdict="YES" if ok else "NO",p=round(pr,2),qs=[dict(q=q,p=round(v,2),why=w) for q,v,w in Q])
 # ---------- copy-trading (configurable list; no PnL fabricated) ----------
 def copy_watch(cfg):
     for w in cfg.get("copy_wallets",[]):
@@ -103,7 +141,9 @@ def sell(c,p,frac,price,reason,cfg):
     rem=p["remaining"]-q;closed=rem<=1e-12 or frac>=1
     c.execute("update positions set remaining=?,proceeds=proceeds+?,fees=fees+?,status=?,closed=?,exit_reason=coalesce(exit_reason||'; ','')||? where id=?",
       (0 if closed else rem,gross-fee,fee,"closed" if closed else "open",now() if closed else None,reason,p["id"]))
-    log("exit" if closed else "partial_exit",{"symbol":p["symbol"],"price":px,"frac":frac,"reason":reason,"pnl":None if not closed else None})
+    pnl=round(p["proceeds"]+gross-fee-p["cost"],2) if closed else None
+    log("exit" if closed else "partial_exit",{"symbol":p["symbol"],"price":px,"frac":frac,"reason":reason,"pnl":pnl,"pct":round(100*pnl/p["cost"],1) if pnl is not None else None})
+    seat("EXECUTOR","done",f"SIM SELL {frac:.0%} ${p['symbol']} @ {px:.6g} - {reason}");seat("LOGGER","done",f"${p['symbol']} exit: {reason}"+(f" P&L ${pnl:+.2f}" if pnl is not None else ""))
 def manage(c,cfg,live):
     for p in c.execute("select * from positions where status='open'").fetchall():
         pr=live.get(p["token"]);
@@ -123,41 +163,61 @@ def day_pnl(c,cfg):
 def cycle():
     global _conn
     cfg=C();c=db();_conn=c
+    seat("SCOUT","working","scanning DexScreener profiles + boosts (paid promotions) + GeckoTerminal new pools")
     cands=candidates()
     op=[p["token"] for p in c.execute("select token from positions where status='open'")]
     seen={r[0] for r in c.execute("select token from signals where ts>?",((dt.datetime.now()-dt.timedelta(hours=6)).isoformat(),))}
     pairs=pairs_for(list(set(cands)|set(op)))
     live={a:float(p["priceUsd"]) for a,p in pairs.items() if p.get("priceUsd")}
-    manage(c,cfg,live);c.commit()
+    new=[a for a in cands if a not in seen and a not in op]
+    spk=sum(1 for a in new if pairs.get(a) and ((pairs[a].get("volume") or {}).get("m5",0) or 0)*12>((pairs[a].get("volume") or {}).get("h1",0) or 1)*1.5)
+    seat("SCOUT","done",f"{len(cands)} pairs scanned, {len(new)} new, {spk} volume spikes")
+    seat("GUARD","working",f"watching {len(op)} open positions");manage(c,cfg,live);c.commit()
+    seat("GUARD","done",f"{len(op)} positions checked: stop, trailing, TP ladder")
     for a,src in cands.items():
         if a in seen or a in op:continue
         p=pairs.get(a)
-        def sig(st,rs,sc=None):
-            c.execute("insert into signals(ts,token,symbol,pair,source,liq,score,status,reason) values(?,?,?,?,?,?,?,?,?)",(now(),a,(p or {}).get("baseToken",{}).get("symbol","?"),(p or {}).get("url",""),src,((p or {}).get("liquidity") or {}).get("usd"),sc,st,rs))
-            log(st,{"symbol":(p or {}).get("baseToken",{}).get("symbol","?"),"reason":rs,"score":sc});c.commit()
-        if not p:sig("killed","no DEX pair data");continue
-        try:k=rug(a,p,cfg)
-        except Exception as e:k=f'rug filter error (fail-closed): {e}'
-        if k:sig("killed",k);continue
-        sc,parts=score(p)
-        if sc<cfg["min_score"]:sig("killed",f"score {sc} < {cfg['min_score']} {parts}",sc);continue
+        J=None;sym=(p or {}).get("baseToken",{}).get("symbol","?")
+        def sig(st,rs,sc=None,who="LOGGER"):
+            c.execute("insert into signals(ts,token,symbol,pair,source,liq,score,status,reason,judge,analyst) values(?,?,?,?,?,?,?,?,?,?,?)",(now(),a,sym,(p or {}).get("url",""),src,((p or {}).get("liquidity") or {}).get("usd"),sc,st,rs,json.dumps(J) if J else None,round(sc/100,2) if sc is not None else None))
+            log(st,{"symbol":sym,"reason":rs,"score":sc,"seat":who,"source":src});c.commit()
+            seat("LOGGER","done",f"${sym}: {st} - {rs}")
+        if not p:sig("killed","no DEX pair data",who="FILTER");continue
+        seat("FILTER","working",f"rug-checking ${sym}");F={}
+        try:k=rug(a,p,cfg,F)
+        except Exception as e:k=f"rug filter error (fail-closed): {e}"
+        if k:seat("FILTER","kill",f"${sym} killed: {k}");sig("killed",k,who="FILTER");continue
+        seat("FILTER","pass",f"${sym} passed (top10 {F.get('top10',0):.0f}%, dev {F.get('dev',0):.1f}%)")
+        sc,parts=score(p);gate=cfg.get("analyst_gate",0.6)
+        if sc/100<gate:seat("ANALYST","kill",f"${sym} score {sc/100:.2f} < {gate}");sig("killed",f"score {sc/100:.2f} < {gate} {parts}",sc,"ANALYST");continue
+        seat("ANALYST","pass",f"${sym} score {sc/100:.2f} {parts}")
+        seat("WHALE","working",f"reading >=$1k trades on ${sym}");W=whale(p)
+        seat("WHALE","done" if W else "idle",f"${sym}: {W['n_buys']} large buys ${W['buy_usd']:,} / {W['n_sells']} large sells ${W['sell_usd']:,}" if W else "trade data unavailable")
+        J=judge(p,F,W,cfg)
+        seat("JUDGE","pass" if J["verdict"]=="YES" else "kill",f"${sym} verdict {J['verdict']} p={J['p']}")
+        if J["verdict"]!="YES":sig("killed",f"judge NO p={J['p']}: "+min(J["qs"],key=lambda q:q["p"])["q"],sc,"JUDGE");continue
         cash,opn,eq=state(c,cfg);dp,base=day_pnl(c,cfg)
         if cfg["kill_switch"] or os.path.exists(f"{DATA}/KILL"):sig("passed_not_traded","kill switch on",sc);continue
         if dp<=-cfg["daily_loss_limit_pct"]*base:sig("passed_not_traded",f"daily loss limit hit ({dp:.2f})",sc);continue
         if len(opn)>=cfg["max_open"]:sig("passed_not_traded","max open positions",sc);continue
-        size=min(cash,eq*cfg["size_pct"]);fee=size*cfg["fee_pct"];px=float(p["priceUsd"])*(1+cfg["slippage"])
-        c.execute("insert into positions(token,symbol,pair,opened,entry,qty,cost,peak,last,remaining,fees,status) values(?,?,?,?,?,?,?,?,?,?,?,'open')",
-          (a,p["baseToken"]["symbol"],p.get("url"),now(),px,(size-fee)/px,size,px,px,(size-fee)/px,fee))
-        sig("traded",f"entry ${size:.2f} @ {px:.8g} score {sc} {parts}",sc);log("entry",{"symbol":p["baseToken"]["symbol"],"size":size,"price":px})
+        size=min(cash,eq*cfg["size_pct"]);seat("SIZER","done",f"${sym}: {cfg['size_pct']:.0%} of ${eq:,.0f} equity = ${size:.2f}")
+        mid=float(p["priceUsd"]);px=mid*(1+cfg["slippage"]);fee=size*cfg["fee_pct"];stop=px*(1+cfg["stop_loss"])
+        seat("GUARD","done",f"${sym}: stop {stop:.6g} ({cfg['stop_loss']:.0%}) set before entry; trail {cfg['trail_pct']:.0%}; TP {[l[0] for l in cfg['tp_ladder']]}")
+        why=f"score {sc/100:.2f}, judge p={J['p']}, src {src}"
+        c.execute("insert into positions(token,symbol,pair,opened,entry,qty,cost,peak,last,remaining,fees,status,entry_reason,stop) values(?,?,?,?,?,?,?,?,?,?,?,'open',?,?)",(a,sym,p.get("url"),now(),px,(size-fee)/px,size,px,px,(size-fee)/px,fee,why,stop))
+        seat("EXECUTOR","done",f"SIM BUY ${sym} ${size:.2f} @ {px:.6g} (+{cfg['slippage']:.0%} slip, fee ${fee:.2f})")
+        sig("traded",f"entry ${size:.2f} @ {px:.8g} - {why}",sc,"EXECUTOR");log("entry",{"symbol":sym,"size":size,"price":px,"reason":why})
     cash,opn,eq=state(c,cfg);c.execute("insert into equity values(?,?,?)",(now(),eq,cash));c.commit()
     copy_watch(cfg);c.commit();_conn=None;write_status()
+    for k in SEATS:
+        if SEATS[k]["status"]=="working":SEATS[k]["status"]="idle"
 def stats():
     c=db();cfg=C();cash,op,eq=state(c,cfg)
     f={r[0]:r[1] for r in c.execute("select status,count(*) from signals group by status")}
     cl=c.execute("select * from positions where status='closed'").fetchall()
     w=sum(1 for p in cl if p["proceeds"]>p["cost"]);rp=sum(p["proceeds"]-p["cost"] for p in cl)
     kr=[dict(r) for r in c.execute("select substr(reason,1,instr(reason||' ',' ')+8) k,count(*) n from signals where status='killed' group by k order by n desc limit 8")]
-    return dict(ts=now(),equity=round(eq,2),cash=round(cash,2),pnl=round(eq-cfg["start_equity"],2),funnel=dict(signals=sum(f.values()),**f),
+    return dict(ts=now(),start=cfg["start_equity"],equity=round(eq,2),cash=round(cash,2),pnl=round(eq-cfg["start_equity"],2),funnel=dict(signals=sum(f.values()),**f),
       closed=len(cl),wins=w,win_rate=round(w/len(cl),3) if cl else None,realized_pnl_after_fees=round(rp,2),fees=round(sum(p["fees"] for p in c.execute("select fees from positions")),2),
       open=[dict(symbol=p["symbol"],entry=p["entry"],last=p["last"],pnl_pct=round(100*(p["last"]/p["entry"]-1),2),opened=p["opened"]) for p in op],top_kill_reasons=kr)
 def write_status():
@@ -176,7 +236,7 @@ _fails={}
 class H(BaseHTTPRequestHandler):
     def log_message(s,*a):pass
     def authed(s):
-        if not PW:return False
+        if not PW:return s.client_address[0] in ("127.0.0.1","::1") and not s.headers.get("X-Forwarded-For")
         ck=s.headers.get("Cookie","")
         for p in ck.split(";"):
             k,_,v=p.strip().partition("=")
@@ -206,7 +266,7 @@ class H(BaseHTTPRequestHandler):
             c=db();b=json.dumps(dict(stats=stats(),equity=[list(r) for r in c.execute("select ts,equity from equity order by ts")],
               feed=[dict(r) for r in c.execute("select ts,kind,data from events where kind!='api_error' order by id desc limit 80")],
               trades=[dict(r) for r in c.execute("select * from positions order by id desc limit 50")],
-              signals=[dict(r) for r in c.execute("select ts,symbol,source,liq,score,status,reason,pair from signals order by id desc limit 80")]))
+              signals=[dict(r) for r in c.execute("select ts,symbol,source,liq,score,analyst,status,reason,pair,judge from signals order by id desc limit 80")],seats=SEATS,poll=C()["poll_sec"]))
             return s.send(200,b,"application/json")
         return s.static("index.html")
     def do_POST(s):
