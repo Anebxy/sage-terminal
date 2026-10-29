@@ -1,51 +1,86 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0a0f0d"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Sage"><link rel="manifest" href="/manifest.json"><link rel="icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><title>Sage Terminal</title><style>:root{--bg:#0a0f0d;--p:#111915;--b:#1e2b24;--g:#39ff88;--r:#ff4d6d;--y:#ffd166;--t:#cfe9dc;--m:#6f8a7c}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--t);font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}.paper{background:var(--y);color:#000;text-align:center;font-weight:700;letter-spacing:.15em;padding:4px;font-size:11px;position:sticky;top:0;z-index:9}
-header{display:flex;justify-content:space-between;align-items:center;padding:12px 14px 4px}header b{color:var(--g);font-size:16px}#live{color:var(--m);font-size:11px}#live i{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--g);margin-right:5px;animation:p 1.6s infinite}@keyframes p{50%{opacity:.25}}
-.k{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;padding:6px 12px}.c{background:var(--p);border:1px solid var(--b);border-radius:12px;padding:10px 12px}.c small{color:var(--m);display:block;font-size:10px;text-transform:uppercase;letter-spacing:.08em}.c div{font-size:19px;margin-top:2px}
-section{margin:10px 12px;background:var(--p);border:1px solid var(--b);border-radius:12px;padding:10px 12px}h2{font-size:11px;color:var(--m);text-transform:uppercase;letter-spacing:.1em;margin:0 0 8px;display:flex;justify-content:space-between;align-items:center}
-.up{color:var(--g)}.dn{color:var(--r)}.y{color:var(--y)}.m{color:var(--m)}canvas{width:100%;height:150px;display:block}
-.seats{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.seat{border:1px solid var(--b);border-radius:9px;padding:7px;background:#0c1310;transition:all .4s;min-height:70px}.seat b{font-size:10px;letter-spacing:.08em;display:flex;justify-content:space-between}.seat b i{width:7px;height:7px;border-radius:50%;background:#2a3a32;display:inline-block}.seat p{margin:4px 0 0;font-size:9.5px;color:var(--m);overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}
-.seat.hot{border-color:var(--g);box-shadow:0 0 12px #39ff8844}.seat.hot b i{background:var(--g);animation:p 1s infinite}.seat.kill{border-color:#ff4d6d88}.seat.kill b i{background:var(--r)}.seat.pass b i,.seat.done b i{background:#1f9a5a}.seat.na{opacity:.55}
-.fl{font-size:15px;margin-bottom:8px}.bar{height:18px;border-radius:5px;background:#16241d;position:relative;overflow:hidden;margin:4px 0}.bar span{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,#7a1f33,var(--r));opacity:.55}.bar em{position:relative;padding-left:7px;font-style:normal;font-size:10.5px;line-height:18px}
-.tr{display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-top:1px solid var(--b)}.tr:first-child{border-top:0}.tr .s{font-weight:700}.tr .w{font-size:10.5px;color:var(--m)}.tr .r{text-align:right;white-space:nowrap}
-.jv{border-top:1px solid var(--b);padding:6px 0}.jq{display:flex;justify-content:space-between;font-size:11px}.pb{height:4px;background:#16241d;border-radius:3px;margin:2px 0 5px}.pb span{display:block;height:100%;border-radius:3px}
-.feed{max-height:50vh;overflow:auto}.ev{padding:6px 0;border-top:1px solid var(--b);font-size:12px}.ev .t{color:var(--m);font-size:10px}.tag{display:inline-block;padding:0 6px;border-radius:4px;font-size:10px;font-weight:700;margin-right:6px}
-.tabs{display:flex;gap:5px}.tabs button{background:none;border:1px solid var(--b);color:var(--m);border-radius:6px;font:inherit;font-size:10px;padding:2px 7px}.tabs button.a{color:var(--g);border-color:var(--g)}footer{text-align:center;color:var(--m);font-size:10px;padding:14px}footer a{color:var(--m)}</style></head>
-<body><div class="paper">PAPER TRADING · SIMULATED · NO REAL MONEY</div>
-<header><b>&gt;_ Sage Terminal · desk</b><span id="live"><i></i>connecting…</span></header>
-<div class="k"><div class="c"><small>Start → now</small><div id="eq">–</div></div><div class="c"><small>Total P&amp;L</small><div id="pnl">–</div></div><div class="c"><small>Win rate</small><div id="wr">–</div></div><div class="c"><small>Cash · fees</small><div id="cash">–</div></div></div>
-<section><h2>Agent desk <span id="cyc"></span></h2><div class="seats" id="seats"></div></section>
-<section><h2>Funnel</h2><div class="fl" id="fl"></div><div id="kr"></div></section>
-<section><h2>Trades <span class="tabs" id="tt"><button data-t="all" class="a">all</button><button data-t="trades">trades</button><button data-t="skips">skips</button></span></h2><div id="trades"></div></section>
-<section><h2>Judge · latest verdict</h2><div id="judge"></div></section>
-<section><h2>Equity curve <span id="eqr"></span></h2><canvas id="cv"></canvas></section>
-<section><h2>Live feed</h2><div class="feed" id="feed"></div></section>
-<footer>Simulated trades on public market data only (DexScreener, GeckoTerminal, RugCheck). No wallets, keys or real orders. Boosts = paid DexScreener promotions, not social data. Large trades = GeckoTerminal public trades ≥$1k, not a smart-wallet list. · <a href="/logout">log out</a></footer>
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#07090d"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Sage"><link rel="manifest" href="/manifest.json"><link rel="icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><title>SAGE TERMINAL</title>
+<style>
+:root{--bg:#07090d;--card:#0e1218cc;--b:#1b222c;--t:#e6ebf2;--m:#7d8796;--g:#2ee38a;--r:#ff5468;--bl:#5aa2ff;--o:#ffa54a;--pu:#b67cff;--cy:#4fd6d6}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--t);font:12px/1.45 "JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+body{background:radial-gradient(900px 500px at 20% -10%,#14305588,transparent),radial-gradient(700px 500px at 110% 110%,#4a1c4a66,transparent),var(--bg);min-height:100vh;padding-bottom:env(safe-area-inset-bottom)}
+.paper{background:#ffd23f;color:#000;text-align:center;font-weight:800;letter-spacing:.18em;font-size:10px;padding:5px;position:sticky;top:0;z-index:9;padding-top:max(5px,env(safe-area-inset-top))}
+.wrap{max-width:1100px;margin:0 auto;padding:12px}
+.top{display:flex;align-items:center;justify-content:space-between;margin:4px 2px 2px}.brand{display:flex;align-items:center;gap:10px}.brand img{width:40px;height:40px;border-radius:11px}
+.brand h1{margin:0;font-size:22px;letter-spacing:.04em;font-weight:800}.brand h1 span{color:var(--pu)}
+.pill{display:flex;align-items:center;gap:7px;background:#0e1218;border:1px solid var(--b);border-radius:20px;padding:6px 12px;font-weight:700;font-size:11px}.dot{width:9px;height:9px;border-radius:50%;background:var(--g);box-shadow:0 0 10px var(--g);animation:pl 1.6s infinite}@keyframes pl{50%{opacity:.35}}
+.sub{display:flex;justify-content:space-between;color:var(--m);font-size:10.5px;letter-spacing:.12em;margin:2px 4px 12px 54px}
+.card{background:var(--card);border:1px solid var(--b);border-radius:14px;padding:12px 14px;backdrop-filter:blur(8px)}
+.lbl{font-size:9.5px;color:var(--m);letter-spacing:.12em;text-transform:uppercase}.big{font-size:24px;font-weight:700;margin-top:4px}.small{font-size:10.5px;color:var(--m);margin-top:2px}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}.pnl{border-left:3px solid var(--g)}.pnl.neg{border-left-color:var(--r)}
+.wr{display:flex;align-items:center;gap:12px}.ring{width:58px;height:58px;flex:none}.wl b{display:block;font-size:11px}
+.up{color:var(--g)}.dn{color:var(--r)}
+.mid{display:grid;grid-template-columns:1fr;gap:10px;margin-top:10px}
+.hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}.hd .lbl{color:var(--t);font-weight:700}
+canvas{width:100%;height:190px;display:block}
+.log{height:300px;overflow:auto;font-size:11px}.log div{padding:2.5px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.log .tg{font-weight:700}
+.T-SCAN{color:var(--bl)}.T-EXEC{color:var(--bl)}.T-FILL{color:var(--g)}.T-FILL.neg{color:var(--r)}.T-WARN{color:var(--o)}.T-RISK{color:var(--o)}.T-TRACK{color:var(--pu)}
+.tgt{display:flex;align-items:center;gap:10px;margin:12px 2px}.tgt .bar{flex:1;height:8px;background:#232a34;border-radius:6px;overflow:hidden}.tgt .bar span{display:block;height:100%;background:var(--g);border-radius:6px;min-width:8px;transition:width .6s}
+.agents{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.ag{position:relative;background:var(--card);border:1px solid var(--b);border-radius:13px;padding:12px 8px 10px;text-align:center;transition:all .4s;min-height:118px}
+.ag .st{position:absolute;top:8px;left:10px;width:18px;height:4px;border-radius:3px}
+.face{width:38px;height:38px;border-radius:50%;margin:6px auto 7px;background:radial-gradient(circle at 35% 30%,#fff,#cfd3da);position:relative;box-shadow:0 2px 8px #0008}
+.face:before,.face:after{content:"";position:absolute;top:13px;width:5px;height:10px;border-radius:3px;background:#15181e}.face:before{left:12px}.face:after{right:12px}
+.ag.on .face:before,.ag.on .face:after{animation:bl 3s infinite}@keyframes bl{0%,92%,100%{transform:scaleY(1)}95%{transform:scaleY(.15)}}
+.ag b{font-size:11px;letter-spacing:.08em}.ag p{margin:4px 0 0;font-size:9.5px;color:var(--m);line-height:1.3;height:37px;overflow:hidden}
+.ag.on{border-color:var(--c);box-shadow:0 0 0 1px var(--c),0 0 18px -4px var(--c)}.ag.kill p{color:#ff8a98}
+.trades .r{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid var(--b);font-size:11px}.trades .r:first-child{border-top:0}.trades .w{color:var(--m);font-size:10px}
+.funnel{font-size:13px}.kr{margin-top:6px;font-size:10.5px;color:var(--m)}
+footer{color:var(--m);font-size:9.5px;text-align:center;padding:16px 8px}footer a{color:var(--m)}
+@media(min-width:820px){.stats{grid-template-columns:repeat(4,1fr)}.mid{grid-template-columns:1.25fr 1fr}.agents{grid-template-columns:repeat(6,1fr)}.log{height:420px}canvas{height:330px}}
+</style></head><body><div class="paper">PAPER TRADING · SIMULATED · NO REAL MONEY</div>
+<div class="wrap">
+<div class="top"><div class="brand"><img src="/icon-192.png" alt=""><h1>SAGE <span>TERMINAL</span></h1></div><div class="pill"><i class="dot" id="dot"></i><span id="live">LIVE</span></div></div>
+<div class="sub"><span>PAPER MODE</span><span id="tasks">– TASKS</span></div>
+<div class="stats">
+<div class="card"><div class="lbl">Balance</div><div class="big" id="bal">–</div><div class="small" id="start">started at –</div></div>
+<div class="card pnl" id="pnlc"><div class="lbl">Total P&amp;L</div><div class="big" id="pnl">–</div><div class="small" id="pnlp">–</div></div>
+<div class="card wr"><svg class="ring" viewBox="0 0 36 36"><circle cx="18" cy="18" r="15.5" fill="none" stroke="#232a34" stroke-width="4"/><circle id="arc" cx="18" cy="18" r="15.5" fill="none" stroke="#2ee38a" stroke-width="4" stroke-linecap="round" stroke-dasharray="0 100" transform="rotate(-90 18 18)" pathLength="100"/><text id="wrt" x="18" y="21" text-anchor="middle" fill="#e6ebf2" font-size="8" font-weight="700" font-family="monospace">–</text></svg><div class="wl"><div class="lbl">Win rate</div><b class="up" id="w">0W</b><b class="dn" id="l">0L</b></div></div>
+<div class="card"><div class="lbl">Today</div><div class="big" id="day">–</div><div class="small" id="dayt">target –</div></div>
+</div>
+<div class="mid">
+<div class="card"><div class="hd"><span class="lbl">Balance history</span><span class="small" id="range">–</span></div><canvas id="cv"></canvas></div>
+<div class="card"><div class="hd"><span class="lbl">Activity log</span><span class="small" id="res">–</span></div><div class="log" id="log"></div></div>
+</div>
+<div class="tgt"><span class="lbl">Daily target</span><div class="bar"><span id="tb" style="width:0"></span></div><span class="up" id="tp" style="font-weight:700">0%</span></div>
+<div class="agents" id="agents"></div>
+<div class="mid">
+<div class="card"><div class="hd"><span class="lbl">Funnel</span></div><div class="funnel" id="fun"></div><div class="kr" id="kr"></div></div>
+<div class="card trades"><div class="hd"><span class="lbl">Recent calls</span></div><div id="trades"></div></div>
+</div>
+<footer>Simulated trades on free public data only: pump.fun public coin list, DexScreener, GeckoTerminal, RugCheck, Solana RPC. No wallet, keys or real orders. SOCIAL checks links only (X is not read). TRACKER = large public trades, not a profitable-wallet list. DexScreener boosts are paid promotions. · <a href="/logout">log out</a></footer>
+</div>
 <script>
-const G=i=>document.getElementById(i),f2=n=>n==null?'–':(+n).toLocaleString(undefined,{maximumFractionDigits:2}),cl=n=>n>0?'up':n<0?'dn':'m',esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])),sg=n=>(n>=0?'+':'')+n;
-const ORDER=['SCOUT','FILTER','ANALYST','WHALE','JUDGE','SIZER','EXECUTOR','GUARD','LOGGER'];let D=null,T='all',prevN={};
-G('tt').querySelectorAll('button').forEach(b=>b.onclick=()=>{G('tt').querySelectorAll('button').forEach(x=>x.classList.remove('a'));b.classList.add('a');T=b.dataset.t;trades()});
-function seats(S){G('seats').innerHTML=ORDER.map(k=>{const s=S[k]||{};const fresh=s.ts&&(Date.now()-new Date(s.ts).getTime())<90000;let c=s.status=='working'||(fresh&&prevN[k]!=null&&s.n>prevN[k])?'hot':s.status;if(k=='WHALE'&&!s.ts)c='na';prevN[k]=s.n;
- return `<div class="seat ${c}"><b>${k}<i></i></b><p>${esc(s.line||'waiting…')}</p></div>`}).join('')}
-function trades(){if(!D)return;const pos=D.trades.map(p=>{const open=p.status=='open',val=open?p.remaining*p.last:0,pnl=p.proceeds+val-p.cost,pct=100*pnl/p.cost;
-  return{ts:p.opened,h:`<div class="tr"><div><span class="s">$${esc(p.symbol)}</span> <span class="m">${open?'OPEN':'closed'}</span><div class="w">${esc(p.entry_reason||'')}${p.exit_reason?' → '+esc(p.exit_reason):''}</div></div><div class="r ${cl(pnl)}">${sg(pct.toFixed(0))}% ${pnl>=0?'+':'-'}$${Math.abs(pnl).toFixed(2)}</div></div>`,k:'trades'}});
- const sk=D.signals.filter(s=>s.status!='traded').map(s=>({ts:s.ts,k:'skips',h:`<div class="tr"><div><span class="s">$${esc(s.symbol)}</span> <span class="m">${esc(s.source=='boosts'||s.source=='boosts_top'?'boost (paid promo)':s.source)}</span><div class="w">skip: ${esc(s.reason)}</div></div><div class="r dn">skip</div></div>`}));
- G('trades').innerHTML=[...pos,...sk].filter(x=>T=='all'||x.k==T).sort((a,b)=>b.ts<a.ts?-1:1).slice(0,40).map(x=>x.h).join('')||'<div class="m">Nothing yet</div>'}
-function judge(){const j=D.signals.find(s=>s.judge);if(!j){G('judge').innerHTML='<div class="m">No candidate has reached the judge yet (most die at FILTER/ANALYST).</div>';return}const J=JSON.parse(j.judge);
- G('judge').innerHTML=`<div style="font-size:15px;margin-bottom:6px">$${esc(j.symbol)} · <span class="${J.verdict=='YES'?'up':'dn'}">${J.verdict}</span> <span class="m">p=${J.p} (gate 0.6)</span></div>`+J.qs.map(q=>`<div class="jv"><div class="jq"><span>${esc(q.q)}</span><span class="${q.p>=.6?'up':q.p>=.3?'y':'dn'}">${q.p.toFixed(2)}</span></div><div class="pb"><span style="width:${q.p*100}%;background:${q.p>=.6?'#39ff88':q.p>=.3?'#ffd166':'#ff4d6d'}"></span></div><div class="m" style="font-size:10px">${esc(q.why)}</div></div>`).join('')}
-const TAG={entry:['ENTRY','#39ff88'],exit:['EXIT','#ffd166'],partial_exit:['TP','#ffd166'],killed:['KILL','#ff4d6d'],traded:['TRADE','#39ff88'],passed_not_traded:['PASS','#8ab4f8'],cycle_error:['ERR','#ff4d6d']};
-function feed(){G('feed').innerHTML=D.feed.map(e=>{let d={};try{d=JSON.parse(e.data)}catch(x){}const[t,c]=TAG[e.kind]||[e.kind.toUpperCase(),'#6f8a7c'];
- const who=d.seat?`<span class="m">[${esc(d.seat)}]</span> `:'';const msg=e.kind=='entry'?`$${esc(d.symbol)} $${f2(d.size)} @ ${(+d.price).toPrecision(4)}`:e.kind=='exit'?`$${esc(d.symbol)} ${esc(d.reason)}${d.pnl!=null?` <span class="${cl(d.pnl)}">${sg(d.pct)}% ${d.pnl>=0?'+':'-'}$${Math.abs(d.pnl).toFixed(2)}</span>`:''}`:`$${esc(d.symbol||'')} ${esc(d.reason||(d.tb||'').slice(-120))}`;
- return `<div class="ev"><span class="tag" style="background:${c}22;color:${c}">${t}</span>${who}${msg}<div class="t">${esc(e.ts.replace('T',' '))}</div></div>`}).join('')||'<div class="m">No events yet</div>'}
-function chart(pts){const c=G('cv'),r=devicePixelRatio||1,w=c.clientWidth,h=150;c.width=w*r;c.height=h*r;const x=c.getContext('2d');x.scale(r,r);if(pts.length<2){x.fillStyle='#6f8a7c';x.fillText('collecting data…',8,20);return}
- const st=Math.max(1,Math.floor(pts.length/400)),p=pts.filter((_,i)=>i%st==0||i==pts.length-1),v=p.map(q=>q[1]),lo=Math.min(...v,D.stats.start),hi=Math.max(...v,D.stats.start),pad=(hi-lo)*.1||1,Y=y=>h-6-(y-lo+pad)/(hi-lo+2*pad)*(h-12),X=i=>i/(p.length-1)*w;
- x.setLineDash([3,4]);x.strokeStyle='#6f8a7c';x.beginPath();x.moveTo(0,Y(D.stats.start));x.lineTo(w,Y(D.stats.start));x.stroke();x.setLineDash([]);
- const col=v[v.length-1]>=D.stats.start?'#39ff88':'#ff4d6d',g=x.createLinearGradient(0,0,0,h);g.addColorStop(0,col+'55');g.addColorStop(1,col+'00');
- x.beginPath();p.forEach((q,i)=>i?x.lineTo(X(i),Y(q[1])):x.moveTo(0,Y(q[1])));x.strokeStyle=col;x.lineWidth=1.6;x.stroke();x.lineTo(w,h);x.lineTo(0,h);x.fillStyle=g;x.fill();G('eqr').textContent=`$${f2(lo)} – $${f2(hi)}`}
-async function load(){try{const r=await fetch('/api',{cache:'no-store'});if(r.status==401){location='/login';return}D=await r.json();const s=D.stats,fu=s.funnel;
- G('eq').innerHTML=`<span class="m" style="font-size:13px">$${f2(s.start)} →</span> $${f2(s.equity)}`;G('pnl').innerHTML=`<span class="${cl(s.pnl)}">${s.pnl>=0?'+':'-'}$${f2(Math.abs(s.pnl))} <span style="font-size:12px">${sg((100*s.pnl/s.start).toFixed(1))}%</span></span>`;
- G('wr').innerHTML=s.win_rate==null?'<span class="m">–</span>':`${(s.win_rate*100).toFixed(0)}% <span class="m" style="font-size:12px">${s.wins}/${s.closed}</span>`;G('cash').innerHTML=`$${f2(s.cash)} <span class="m" style="font-size:12px">· $${f2(s.fees)}</span>`;
- G('fl').innerHTML=`<b>${fu.signals}</b> signals → <b class="dn">${fu.killed||0}</b> killed → <b class="up">${fu.traded||0}</b> traded <span class="m">· ${s.open.length} open</span>`;
- const mx=Math.max(1,...s.top_kill_reasons.map(k=>k.n));G('kr').innerHTML=s.top_kill_reasons.map(k=>`<div class="bar"><span style="width:${k.n/mx*100}%"></span><em>${esc(k.k)} · ${k.n}</em></div>`).join('');
- seats(D.seats||{});trades();judge();feed();chart(D.equity);G('cyc').textContent=`cycle every ${D.poll}s`;G('live').innerHTML='<i></i>live · '+new Date().toLocaleTimeString()}catch(e){G('live').innerHTML='<span class="dn">offline · retrying</span>'}}
-load();setInterval(load,5000);document.addEventListener('visibilitychange',()=>!document.hidden&&load());addEventListener('resize',()=>D&&chart(D.equity));if('serviceWorker'in navigator)navigator.serviceWorker.register('/sw.js');
+const G=i=>document.getElementById(i),$f=n=>(+n).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}),esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])),money=n=>(n<0?'-':'+')+'$'+$f(Math.abs(n));
+const COL={'SCOUT':'#5aa2ff','SOCIAL':'#4fd6d6','RUG GUARD':'#ffa54a','TRACKER':'#b67cff','TRADER':'#2ee38a','RISK':'#ff5468'};let D=null,prev={};
+function agents(S,list){G('agents').innerHTML=list.map(k=>{const s=S[k]||{},c=COL[k]||'#888',age=s.ts?(Date.now()-new Date(s.ts))/1000:1e9,on=s.status=='working'||(prev[k]!=null&&s.n>prev[k])||age<20;prev[k]=s.n;
+ return `<div class="ag ${on?'on':''} ${s.status=='kill'?'kill':''}" style="--c:${c}"><i class="st" style="background:${c}"></i><div class="face"></div><b>${esc(k)}</b><p>${esc(s.line||'idle')}</p></div>`}).join('')}
+function chart(pts,start){const c=G('cv'),r=devicePixelRatio||1,w=c.clientWidth,h=c.clientHeight;c.width=w*r;c.height=h*r;const x=c.getContext('2d');x.scale(r,r);
+ if(pts.length<2){x.fillStyle='#7d8796';x.fillText('collecting data…',8,20);return}
+ const st=Math.max(1,Math.floor(pts.length/500)),p=pts.filter((_,i)=>i%st==0||i==pts.length-1),v=p.map(q=>q[1]),lo=Math.min(...v,start),hi=Math.max(...v,start),pd=(hi-lo)*.12||1,Y=y=>h-14-(y-lo+pd)/(hi-lo+2*pd)*(h-34),X=i=>6+i/(p.length-1)*(w-12);
+ x.fillStyle='#7d8796';x.font='10px monospace';x.fillText('$'+(hi+pd).toFixed(0),2,12);x.fillText('$'+(lo-pd).toFixed(0),2,h-2);
+ x.setLineDash([3,4]);x.strokeStyle='#39424f';x.beginPath();x.moveTo(0,Y(start));x.lineTo(w,Y(start));x.stroke();x.setLineDash([]);
+ const g=x.createLinearGradient(0,0,0,h);g.addColorStop(0,'#3d7bdc66');g.addColorStop(1,'#3d7bdc05');x.beginPath();p.forEach((q,i)=>i?x.lineTo(X(i),Y(q[1])):x.moveTo(X(0),Y(q[1])));
+ x.strokeStyle='#5aa2ff';x.lineWidth=1.6;x.stroke();x.lineTo(X(p.length-1),h);x.lineTo(X(0),h);x.fillStyle=g;x.fill();
+ const ex=X(p.length-1),ey=Y(v[v.length-1]);x.fillStyle='#2ee38a';x.shadowColor='#2ee38a';x.shadowBlur=12;x.beginPath();x.arc(ex,ey,4,0,7);x.fill();x.shadowBlur=0;
+ x.font='bold 15px monospace';const lab='$'+$f(v[v.length-1]);x.fillText(lab,Math.max(4,ex-x.measureText(lab).width-10),Math.max(16,ey-10));
+ const t0=new Date(pts[0][0]);G('range').textContent=`since ${t0.toLocaleDateString()} ${t0.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`}
+async function load(){try{const r=await fetch('/api',{cache:'no-store'});if(r.status==401){location='/login';return}D=await r.json();const s=D.stats;
+ G('bal').textContent='$'+$f(s.equity);G('start').textContent='started at $'+$f(s.start);G('pnl').textContent=money(s.pnl);G('pnl').className='big '+(s.pnl>=0?'up':'dn');G('pnlc').className='card pnl'+(s.pnl<0?' neg':'');G('pnlp').textContent=(s.pnl>=0?'+':'')+(100*s.pnl/s.start).toFixed(2)+'%';
+ const wr=s.win_rate==null?0:s.win_rate*100;G('arc').setAttribute('stroke-dasharray',`${wr} 100`);G('wrt').textContent=s.win_rate==null?'–':wr.toFixed(0)+'%';G('w').textContent=s.wins+'W';G('l').textContent=s.losses+'L';
+ G('day').textContent=money(s.day_pnl);G('day').className='big '+(s.day_pnl>=0?'up':'dn');G('dayt').textContent='target +$'+$f(s.day_target);
+ const tp=Math.max(0,Math.min(100,100*s.day_pnl/s.day_target));G('tb').style.width=tp+'%';G('tp').textContent=tp.toFixed(0)+'%';
+ G('tasks').textContent=s.tasks.toLocaleString()+' TASKS';G('res').textContent=s.funnel.signals.toLocaleString()+' RESOLVED';
+ G('log').innerHTML=D.feed.map(e=>{let d={};try{d=JSON.parse(e.data)}catch(_){}const neg=e.kind=='FILL'&&d.pnl<0;return `<div title="${esc(e.ts)} · ${esc(d.agent)}"><span class="tg T-${e.kind}${neg?' neg':''}">[${e.kind}]</span> ${esc(d.msg)}</div>`}).join('')||'<div class="small">waiting for first cycle…</div>';
+ agents(D.seats,D.agents||Object.keys(D.seats));chart(D.equity,s.start);
+ const f=s.funnel;G('fun').innerHTML=`<b>${f.signals}</b> signals → <b class="dn">${f.killed||0}</b> killed → <b class="up">${f.traded||0}</b> traded · ${s.open.length} open`;G('kr').innerHTML=s.top_kill_reasons.map(k=>`${esc(k.k)} ×${k.n}`).join(' · ');
+ const pos=D.trades.slice(0,8).map(p=>{const o=p.status=='open',pl=p.proceeds+(o?p.remaining*p.last:0)-p.cost;return `<div class="r"><div><b>$${esc(p.symbol)}</b> <span class="w">${o?'OPEN':'closed'}</span><div class="w">${esc(p.exit_reason||p.entry_reason||'')}</div></div><div class="${pl>=0?'up':'dn'}" style="text-align:right;white-space:nowrap">${pl>=0?'+':''}${(100*pl/p.cost).toFixed(0)}% ${money(pl)}</div></div>`});
+ const sk=D.signals.filter(x=>x.status!='traded').slice(0,8).map(x=>`<div class="r"><div><b>$${esc(x.symbol)}</b> <span class="w">${esc(x.source)}</span><div class="w">skip: ${esc(x.reason)}</div></div><div class="dn">skip</div></div>`);
+ G('trades').innerHTML=pos.concat(sk).join('')||'<div class="small">none yet</div>';G('live').textContent='LIVE';G('dot').style.background=''}
+ catch(e){G('live').textContent='OFFLINE';G('dot').style.background='#ff5468'}}
+load();setInterval(load,4000);document.addEventListener('visibilitychange',()=>!document.hidden&&load());addEventListener('resize',()=>D&&chart(D.equity,D.stats.start));if('serviceWorker'in navigator)navigator.serviceWorker.register('/sw.js');
 </script></body></html>
