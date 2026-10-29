@@ -66,6 +66,15 @@ def pairs_for(tokens):
             a=p["baseToken"]["address"]
             if a in tokens and (a not in res or (p.get("liquidity") or {}).get("usd",0)>(res[a].get("liquidity") or {}).get("usd",0)):res[a]=p
     return res
+# ---------- pump.fun bonding-curve liquidity (pre-graduation) ----------
+def curve_liq(p,m):
+    """Virtual SOL reserves from curve market cap (constant product, 30 SOL / 1.073B virtual start), x2 sides, in USD."""
+    try:
+        mc_usd=m.get("market_cap_usd") or p.get("marketCap") or p.get("fdv") or 0
+        sol_usd=(m["market_cap_usd"]/m["market_cap"]) if m.get("market_cap") else float(p["priceUsd"])/float(p["priceNative"])
+        vsol=(mc_usd/sol_usd*30*1.073e9/1e9)**0.5
+        return round(2*vsol*sol_usd),round(vsol,1)
+    except Exception:return 0,0
 # ---------- SOCIAL: link presence + website reachability. Does NOT read X (no API access). ----------
 def social(p,m):
     info=(p or {}).get("info") or {};links={}
@@ -87,7 +96,8 @@ def social(p,m):
 # ---------- RUG GUARD: RugCheck ----------
 def rug(addr,p,cfg,m,F):
     liq=(p.get("liquidity") or {}).get("usd",0) or 0;pump=p.get("dexId")=="pumpfun"
-    if not pump and liq<cfg["min_liq"]:return f"liquidity ${liq:,.0f} < ${cfg['min_liq']:,}"
+    mn=cfg.get("pf_min_liq",15000) if pump else cfg["min_liq"]
+    if liq<mn:return f"{'curve ' if pump else ''}liquidity ${liq:,.0f} < ${mn:,}"
     ch=(p.get("priceChange") or {}).get("h1",0) or 0
     if ch>cfg["max_1h_change_pct"]:return f"already up {ch:.0f}% in 1h (late)"
     r=get(f"https://api.rugcheck.xyz/v1/tokens/{addr}/report",2.0)
@@ -200,17 +210,19 @@ def cycle():
         p=pairs.get(a);m=meta.get(a,{});src=cands[a];sym=(p or {}).get("baseToken",{}).get("symbol") or m.get("symbol") or "?";J=None
         def sig(st,rs,agent,sc=None):
             c.execute("insert into signals(ts,token,symbol,pair,source,liq,score,status,reason,judge,analyst,agent) values(?,?,?,?,?,?,?,?,?,?,?,?)",(now(),a,sym,(p or {}).get("url",""),src,((p or {}).get("liquidity") or {}).get("usd"),sc,st,rs,json.dumps(J) if J else None,round(sc/100,2) if sc is not None else None,agent));c.commit()
-        if not p:sig("killed","no DEX pair data yet","SCOUT");continue
+        if not p:L("WARN","SCOUT",f"${sym} no DEX pair yet - skipped");sig("killed","no DEX pair data yet","SCOUT");continue
+        if p.get("dexId")=="pumpfun" and not ((p.get("liquidity") or {}).get("usd")):
+            lq,vs=curve_liq(p,m);p["liquidity"]={"usd":lq,"curve_vsol":vs}
         seat("SOCIAL","working",f"checking ${sym} links");ok,why,links=social(p,m)
         seat("SOCIAL","pass" if ok else "kill",f"${sym}: {why}")
-        if ok is None:nos.append(sym);sig("killed","no socials","SOCIAL");continue
+        if ok is None:nos.append(sym);L("WARN","SOCIAL",f"${sym} no X/site links - skipped");sig("killed","no socials","SOCIAL");continue
         seat("RUG GUARD","working",f"RugCheck ${sym}");F={}
         try:k=rug(a,p,cfg,m,F)
         except Exception as e:k=f"rug check error (fail-closed): {e}"
         if k:seat("RUG GUARD","kill",f"${sym} {k}");L("WARN","RUG GUARD",f"${sym} {k}");sig("killed",k,"RUG GUARD");continue
         seat("RUG GUARD","pass",f"${sym} clean: dev {F.get('dev',0):.1f}%, bundles {F.get('bundle',0):.0f}%");L("RISK","RUG GUARD",f"rug check ${sym} - dev {F.get('dev',0):.1f}%, top10 {F.get('top10',0):.0f}%, clean")
         sc=score(p)
-        if sc/100<cfg["analyst_gate"]:sig("killed",f"score {sc/100:.2f} < {cfg['analyst_gate']}","RISK",sc);continue
+        if sc/100<cfg["analyst_gate"]:L("WARN","RISK",f"${sym} score {sc/100:.2f} < {cfg['analyst_gate']} - skipped");sig("killed",f"score {sc/100:.2f} < {cfg['analyst_gate']}","RISK",sc);continue
         seat("TRACKER","working",f"big trades on ${sym}");W=tracker(p,cfg["tracker_min_usd"])
         if W:seat("TRACKER","done",f"${sym}: {W['n_buys']} big buys ${W['buy_usd']:,} / {W['n_sells']} sells ${W['sell_usd']:,}");L("TRACK","TRACKER",f"${sym} {W['n_buys']} buys ≥${cfg['tracker_min_usd']} (${W['buy_usd']:,}) vs {W['n_sells']} sells (${W['sell_usd']:,})")
         J=judge(p,F,W,ok)
@@ -225,7 +237,7 @@ def cycle():
         c.execute("insert into positions(token,symbol,pair,opened,entry,qty,cost,peak,last,remaining,fees,status,entry_reason,stop,creator,dev_bal) values(?,?,?,?,?,?,?,?,?,?,?,'open',?,?,?,?)",(a,sym,p.get("url"),now(),px,(size-fee)/px,size,px,px,(size-fee)/px,fee,why,stop,F.get("creator"),F.get("dev_raw")))
         seat("TRADER","done",f"sim BUY ${sym} ${size:.2f} @ {px:.6g}");L("EXEC","TRADER",f"BUY ${size:.2f} ${sym} @ ${px:.8g}",symbol=sym,reason=why)
         sig("traded",f"entry ${size:.2f} @ {px:.8g} - {why}","TRADER",sc)
-    if nos:L("SCAN","SOCIAL",f"{len(nos)} tokens with no X/site links skipped: "+" ".join("$"+x for x in nos[:6]))
+    L("SCAN","SCOUT",f"cycle done: {len(new)} checked, {len(nos)} no socials, equity ${state(c,cfg)[2]:,.2f}")
     cash,opn,eq=state(c,cfg);c.execute("insert into equity values(?,?,?)",(now(),eq,cash));c.commit();_conn=None;write_status()
     for k in SEATS:
         if SEATS[k]["status"]=="working":SEATS[k]["status"]="idle"
@@ -285,7 +297,7 @@ class H(BaseHTTPRequestHandler):
             c=db();b=json.dumps(dict(stats=stats(),equity=[list(r) for r in c.execute("select ts,equity from equity order by ts")],
               feed=[dict(r) for r in c.execute("select ts,kind,data from events where kind in ('SCAN','EXEC','FILL','WARN','RISK','TRACK') order by id desc limit 80")],
               trades=[dict(r) for r in c.execute("select * from positions order by id desc limit 50")],
-              signals=[dict(r) for r in c.execute("select ts,symbol,source,liq,score,analyst,status,reason,pair,judge from signals order by id desc limit 80")],seats=SEATS,agents=AGENTS,poll=C()["poll_sec"]))
+              signals=[dict(r) for r in c.execute("select ts,symbol,source,liq,score,analyst,status,reason,pair,judge from signals order by id desc limit 80")],seats=SEATS,agents=AGENTS,poll=C()["poll_sec"],server_now=now()))
             return s.send(200,b,"application/json")
         return s.static("index.html")
     def do_POST(s):

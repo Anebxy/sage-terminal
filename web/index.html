@@ -18,7 +18,7 @@ body{background:radial-gradient(900px 500px at 20% -10%,#14305588,transparent),r
 .hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}.hd .lbl{color:var(--t);font-weight:700}
 canvas{width:100%;height:190px;display:block}
 .log{height:300px;overflow:auto;font-size:11px}.log div{padding:2.5px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.log .tg{font-weight:700}
-.T-SCAN{color:var(--bl)}.T-EXEC{color:var(--bl)}.T-FILL{color:var(--g)}.T-FILL.neg{color:var(--r)}.T-WARN{color:var(--o)}.T-RISK{color:var(--o)}.T-TRACK{color:var(--pu)}
+.log .nw{animation:fl 2s}@keyframes fl{0%{background:#2ee38a33}100%{background:transparent}}.T-SCAN{color:var(--bl)}.T-EXEC{color:var(--bl)}.T-FILL{color:var(--g)}.T-FILL.neg{color:var(--r)}.T-WARN{color:var(--o)}.T-RISK{color:var(--o)}.T-TRACK{color:var(--pu)}
 .tgt{display:flex;align-items:center;gap:10px;margin:12px 2px}.tgt .bar{flex:1;height:8px;background:#232a34;border-radius:6px;overflow:hidden}.tgt .bar span{display:block;height:100%;background:var(--g);border-radius:6px;min-width:8px;transition:width .6s}
 .agents{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .ag{position:relative;background:var(--card);border:1px solid var(--b);border-radius:13px;padding:12px 8px 10px;text-align:center;transition:all .4s;min-height:118px}
@@ -35,7 +35,7 @@ footer{color:var(--m);font-size:9.5px;text-align:center;padding:16px 8px}footer 
 </style></head><body><div class="paper">PAPER TRADING · SIMULATED · NO REAL MONEY</div>
 <div class="wrap">
 <div class="top"><div class="brand"><img src="/icon-192.png" alt=""><h1>SAGE <span>TERMINAL</span></h1></div><div class="pill"><i class="dot" id="dot"></i><span id="live">LIVE</span></div></div>
-<div class="sub"><span>PAPER MODE</span><span id="tasks">– TASKS</span></div>
+<div class="sub"><span>PAPER MODE · <span id="ago">connecting…</span></span><span id="tasks">– TASKS</span></div>
 <div class="stats">
 <div class="card"><div class="lbl">Balance</div><div class="big" id="bal">–</div><div class="small" id="start">started at –</div></div>
 <div class="card pnl" id="pnlc"><div class="lbl">Total P&amp;L</div><div class="big" id="pnl">–</div><div class="small" id="pnlp">–</div></div>
@@ -56,8 +56,8 @@ footer{color:var(--m);font-size:9.5px;text-align:center;padding:16px 8px}footer 
 </div>
 <script>
 const G=i=>document.getElementById(i),$f=n=>(+n).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}),esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])),money=n=>(n<0?'-':'+')+'$'+$f(Math.abs(n));
-const COL={'SCOUT':'#5aa2ff','SOCIAL':'#4fd6d6','RUG GUARD':'#ffa54a','TRACKER':'#b67cff','TRADER':'#2ee38a','RISK':'#ff5468'};let D=null,prev={};
-function agents(S,list){G('agents').innerHTML=list.map(k=>{const s=S[k]||{},c=COL[k]||'#888',age=s.ts?(Date.now()-new Date(s.ts))/1000:1e9,on=s.status=='working'||(prev[k]!=null&&s.n>prev[k])||age<20;prev[k]=s.n;
+const COL={'SCOUT':'#5aa2ff','SOCIAL':'#4fd6d6','RUG GUARD':'#ffa54a','TRACKER':'#b67cff','TRADER':'#2ee38a','RISK':'#ff5468'};let D=null,prev={},SKEW=0,lastEv="",lastOk=0;const srv=t=>new Date(t).getTime()-SKEW;
+function agents(S,list){G('agents').innerHTML=list.map(k=>{const s=S[k]||{},c=COL[k]||'#888',age=s.ts?(Date.now()-srv(s.ts))/1000:1e9,on=s.status=='working'||(prev[k]!=null&&s.n>prev[k])||age<20;prev[k]=s.n;
  return `<div class="ag ${on?'on':''} ${s.status=='kill'?'kill':''}" style="--c:${c}"><i class="st" style="background:${c}"></i><div class="face"></div><b>${esc(k)}</b><p>${esc(s.line||'idle')}</p></div>`}).join('')}
 function chart(pts,start){const c=G('cv'),r=devicePixelRatio||1,w=c.clientWidth,h=c.clientHeight;c.width=w*r;c.height=h*r;const x=c.getContext('2d');x.scale(r,r);
  if(pts.length<2){x.fillStyle='#7d8796';x.fillText('collecting data…',8,20);return}
@@ -69,18 +69,19 @@ function chart(pts,start){const c=G('cv'),r=devicePixelRatio||1,w=c.clientWidth,
  const ex=X(p.length-1),ey=Y(v[v.length-1]);x.fillStyle='#2ee38a';x.shadowColor='#2ee38a';x.shadowBlur=12;x.beginPath();x.arc(ex,ey,4,0,7);x.fill();x.shadowBlur=0;
  x.font='bold 15px monospace';const lab='$'+$f(v[v.length-1]);x.fillText(lab,Math.max(4,ex-x.measureText(lab).width-10),Math.max(16,ey-10));
  const t0=new Date(pts[0][0]);G('range').textContent=`since ${t0.toLocaleDateString()} ${t0.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`}
-async function load(){try{const r=await fetch('/api',{cache:'no-store'});if(r.status==401){location='/login';return}D=await r.json();const s=D.stats;
+async function load(){try{const r=await fetch('/api',{cache:'no-store'});if(r.status==401){location='/login';return}D=await r.json();lastOk=Date.now();if(D.server_now)SKEW=new Date(D.server_now).getTime()-Date.now();const s=D.stats;
  G('bal').textContent='$'+$f(s.equity);G('start').textContent='started at $'+$f(s.start);G('pnl').textContent=money(s.pnl);G('pnl').className='big '+(s.pnl>=0?'up':'dn');G('pnlc').className='card pnl'+(s.pnl<0?' neg':'');G('pnlp').textContent=(s.pnl>=0?'+':'')+(100*s.pnl/s.start).toFixed(2)+'%';
  const wr=s.win_rate==null?0:s.win_rate*100;G('arc').setAttribute('stroke-dasharray',`${wr} 100`);G('wrt').textContent=s.win_rate==null?'–':wr.toFixed(0)+'%';G('w').textContent=s.wins+'W';G('l').textContent=s.losses+'L';
  G('day').textContent=money(s.day_pnl);G('day').className='big '+(s.day_pnl>=0?'up':'dn');G('dayt').textContent='target +$'+$f(s.day_target);
  const tp=Math.max(0,Math.min(100,100*s.day_pnl/s.day_target));G('tb').style.width=tp+'%';G('tp').textContent=tp.toFixed(0)+'%';
  G('tasks').textContent=s.tasks.toLocaleString()+' TASKS';G('res').textContent=s.funnel.signals.toLocaleString()+' RESOLVED';
- G('log').innerHTML=D.feed.map(e=>{let d={};try{d=JSON.parse(e.data)}catch(_){}const neg=e.kind=='FILL'&&d.pnl<0;return `<div title="${esc(e.ts)} · ${esc(d.agent)}"><span class="tg T-${e.kind}${neg?' neg':''}">[${e.kind}]</span> ${esc(d.msg)}</div>`}).join('')||'<div class="small">waiting for first cycle…</div>';
+ const top=D.feed[0]?D.feed[0].ts+D.feed.length:'';const fresh=top!==lastEv&&lastEv!=='';lastEv=top;G('log').innerHTML=D.feed.map((e,i)=>{let d={};try{d=JSON.parse(e.data)}catch(_){}const neg=e.kind=='FILL'&&d.pnl<0;return `<div class="${fresh&&(Date.now()-srv(e.ts))<15000?'nw':''}" title="${esc(e.ts)} · ${esc(d.agent)}"><span class="tg T-${e.kind}${neg?' neg':''}">[${e.kind}]</span> ${esc(d.msg)}</div>`}).join('')||'<div class="small">waiting for first cycle…</div>';
  agents(D.seats,D.agents||Object.keys(D.seats));chart(D.equity,s.start);
  const f=s.funnel;G('fun').innerHTML=`<b>${f.signals}</b> signals → <b class="dn">${f.killed||0}</b> killed → <b class="up">${f.traded||0}</b> traded · ${s.open.length} open`;G('kr').innerHTML=s.top_kill_reasons.map(k=>`${esc(k.k)} ×${k.n}`).join(' · ');
  const pos=D.trades.slice(0,8).map(p=>{const o=p.status=='open',pl=p.proceeds+(o?p.remaining*p.last:0)-p.cost;return `<div class="r"><div><b>$${esc(p.symbol)}</b> <span class="w">${o?'OPEN':'closed'}</span><div class="w">${esc(p.exit_reason||p.entry_reason||'')}</div></div><div class="${pl>=0?'up':'dn'}" style="text-align:right;white-space:nowrap">${pl>=0?'+':''}${(100*pl/p.cost).toFixed(0)}% ${money(pl)}</div></div>`});
  const sk=D.signals.filter(x=>x.status!='traded').slice(0,8).map(x=>`<div class="r"><div><b>$${esc(x.symbol)}</b> <span class="w">${esc(x.source)}</span><div class="w">skip: ${esc(x.reason)}</div></div><div class="dn">skip</div></div>`);
  G('trades').innerHTML=pos.concat(sk).join('')||'<div class="small">none yet</div>';G('live').textContent='LIVE';G('dot').style.background=''}
  catch(e){G('live').textContent='OFFLINE';G('dot').style.background='#ff5468'}}
-load();setInterval(load,4000);document.addEventListener('visibilitychange',()=>!document.hidden&&load());addEventListener('resize',()=>D&&chart(D.equity,D.stats.start));if('serviceWorker'in navigator)navigator.serviceWorker.register('/sw.js');
+function tick(){if(!D)return;const t=Math.max(...[D.feed[0]&&D.feed[0].ts,...Object.values(D.seats).map(s=>s.ts)].filter(Boolean).map(srv));const a=Math.max(0,Math.round((Date.now()-t)/1000)),c=Math.round((Date.now()-lastOk)/1000);G('ago').textContent=`last activity ${a}s ago`+(c>10?` · data ${c}s old`:'');G('ago').style.color=a>120||c>15?'#ff5468':a>45?'#ffa54a':'#2ee38a'}
+load();setInterval(load,3000);setInterval(tick,1000);document.addEventListener('visibilitychange',()=>!document.hidden&&load());addEventListener('resize',()=>D&&chart(D.equity,D.stats.start));if('serviceWorker'in navigator)navigator.serviceWorker.register('/sw.js');
 </script></body></html>
