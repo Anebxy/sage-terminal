@@ -126,6 +126,7 @@ def on_curve(mint,b64):
     try:b=base64.b64decode(b64);vt,vs,rt,rs,ts=struct.unpack_from("<QQQQQ",b,8);done=b[48]==1
     except Exception:return
     STATS["trades"]+=1;vs/=1e9;mc=vs/(vt/1e6)*1e9 if vt else t["mcap_sol"];age=time.time()-t["born"]
+    if vs<25 or vs>200 or mc>20*max(t["mcap_sol"],28):t["badcurve"]=True;return   # non-standard curve layout (e.g. non-SOL quote); ignore
     if vs>t["vsol"]+1e-9:
         t["buys"]+=1;t["inflow"]=t.get("inflow",0)+(vs-t["vsol"])
         if age<=CFG()["sniper_window_s"]:t["early"]+=100*max(0,(t.get("vtok",vt)-vt))/1e15
