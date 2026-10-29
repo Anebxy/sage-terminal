@@ -512,6 +512,8 @@ async def healthz(req):
 async def api_state(req):return web.json_response(snapshot(),headers={"Cache-Control":"no-store"})
 async def api_backtest(req):
     p=f"{D}/bt_result.json";return web.json_response(json.load(open(p)) if os.path.exists(p) else {},headers={"Cache-Control":"no-store"})
+async def api_trades(req):
+    return web.json_response([dict(r) for r in db.execute("select p.id,b.name,b.style,b.genome,p.sym,p.opened_ts,p.closed,p.entry_mcap,p.peak_mcap,p.cost,p.proceeds,p.status,p.reason,p.exit_reason,p.sol_px from bot_pos p join bots b on b.id=p.bot order by p.id")],headers={"Cache-Control":"no-store"})
 async def api_evolutions(req):return web.json_response([dict(r) for r in db.execute("select * from evolutions order by id desc limit 50")])
 async def api_stream(req):
     r=web.StreamResponse(headers={"Content-Type":"text/event-stream","Cache-Control":"no-store","X-Accel-Buffering":"no"});await r.prepare(req)
@@ -537,7 +539,7 @@ async def main():
     for n in ("manifest.json","icon-192.png","icon-512.png","apple-touch-icon.png","favicon.ico"):app.router.add_get("/"+n,static(n))
     app.router.add_get("/sw.js",static("sw.js","application/javascript"))
     app.router.add_get("/",static("index.html"));app.router.add_get("/api/state",api_state);app.router.add_get("/api/stream",api_stream)
-    app.router.add_get("/api/backtest",api_backtest);app.router.add_get("/api/evolutions",api_evolutions)
+    app.router.add_get("/api/backtest",api_backtest);app.router.add_get("/api/evolutions",api_evolutions);app.router.add_get("/api/trades",api_trades)
     run=web.AppRunner(app);await run.setup();await web.TCPSite(run,"0.0.0.0",int(os.environ.get("PORT","8787"))).start()
     A["RISK"].say("INFO",f"engine v5 up: {len(BOTS)} paper bots, epoch {kv('epoch',0)}",head=True)
     await asyncio.gather(hub(),poller(),wallets(),dev_watch(),risk_clock(),evolution(),watchdog(),sol_price(),flusher(),EXEC.sweeper())
