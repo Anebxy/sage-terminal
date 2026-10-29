@@ -1,1 +1,40 @@
-{"start_equity": 1000, "poll_sec": 30, "min_liq": 30000, "max_top10_pct": 40, "max_dev_pct": 10, "require_lp_locked_pct": 0, "max_1h_change_pct": 90, "min_score": 55, "size_pct": 0.06, "max_open": 5, "slippage": 0.02, "fee_pct": 0.003, "stop_loss": -0.08, "trail_pct": 0.1, "tp_ladder": [[0.25, 0.33], [0.5, 0.33], [1.0, 1.0]], "max_hold_min": 120, "daily_loss_limit_pct": 0.05, "kill_switch": false, "copy_wallets": [], "solana_rpc": "https://api.mainnet-beta.solana.com", "analyst_gate": 0.6, "judge_threshold": 0.6, "max_bundle_pct": 25, "pf_min_mcap": 8000, "pf_max_age_min": 360, "tracker_min_usd": 500, "daily_target_pct": 0.05, "pf_min_liq": 15000}
+{
+"start_equity": 1000,
+"size_pct": 0.02,
+"max_open": 4,
+"slippage": 0.03,
+"fee_pct": 0.0125,
+"stop_loss": -0.2,
+"trail_pct": 0.15,
+"tp_ladder": [
+[
+0.4,
+0.5
+],
+[
+1.0,
+1.0
+]
+],
+"max_hold_s": 600,
+"daily_target_pct": 0.05,
+"daily_loss_limit_pct": 0.05,
+"kill_switch": false,
+"min_watch_s": 15,
+"max_watch_s": 120,
+"min_mcap_sol": 38,
+"max_entry_mcap_sol": 120,
+"sniper_window_s": 3,
+"max_sniper_pct": 25,
+"max_dev_pct": 10,
+"max_dev_launches_session": 2,
+"rugcheck_optional_for_new": true,
+"require_socials": true,
+"rug_workers": 3,
+"social_workers": 6,
+"ipfs_gateway": "https://ipfs.io/ipfs/",
+"subscription": "$0.00/mo \u00b7 Render free (upgrade pending)",
+"min_buys": 12,
+"rpc_ws": "wss://api.mainnet-beta.solana.com",
+"rpc_http": "https://api.mainnet-beta.solana.com"
+}

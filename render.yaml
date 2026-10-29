@@ -2,7 +2,7 @@ services:
   - type: web
     name: sage-terminal
     runtime: docker
-    plan: free
+    plan: starter
     healthCheckPath: /healthz
     envVars:
       - key: DASH_PASSWORD
