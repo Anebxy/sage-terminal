@@ -49,7 +49,10 @@ HEAD=["engine starting","SAGE v5"];HOPS=collections.Counter()
 def hop(a,b):HOPS[(a,b)]+=1
 KILLS=collections.Counter(kv("kills",{}) or {})
 STATS=collections.Counter(kv("stats",{}) or {})
-def kill(reason):KILLS[reason]+=1
+import re
+def kill(reason):
+    r=re.sub(r"dev bought \d+%","dev bought >10%",reason);r=re.sub(r"snipers \d+% in 3s","snipers >25% in 3s",r);r=re.sub(r"(no bot entry: )?(mcap|inflow) [\d.]+ [<>] [\d.]+",lambda m:(m.group(1) or "")+m.group(2)+" outside bot range",r);r=re.sub(r"\d+ buys < \d+","too few buys",r);r=re.sub(r"snipers \d+%","snipers too heavy",r)
+    KILLS[r]+=1
 # ---------------- shared market state ----------------
 SOL=[0.0];COINS={};CURVE={}     # mint -> strat.Coin ; mint -> curve address
 META={}   # mint -> dict(sym, uri, creator, social, stage, rug, last_reason, series, killed)
