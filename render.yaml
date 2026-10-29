@@ -2,7 +2,7 @@ services:
   - type: web
     name: sage-terminal
     runtime: docker
-    plan: starter
+    plan: starter  # 0.5c-512mb, $7/mo
     healthCheckPath: /healthz
     envVars:
       - key: DASH_PASSWORD

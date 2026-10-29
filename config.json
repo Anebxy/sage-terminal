@@ -33,7 +33,7 @@
 "rug_workers": 3,
 "social_workers": 6,
 "ipfs_gateway": "https://ipfs.io/ipfs/",
-"subscription": "$0.00/mo \u00b7 Render free (upgrade pending)",
+"subscription": "$7.25/mo \u00b7 Render always-on",
 "min_buys": 12,
 "rpc_ws": "wss://api.mainnet-beta.solana.com",
 "rpc_http": "https://api.mainnet-beta.solana.com"
