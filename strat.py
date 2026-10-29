@@ -42,10 +42,11 @@ def sell_fill(c,tokens):
     out=c.vsol-c.vsol*c.vtok/(c.vtok+tokens)
     return max(0,out*(1-FEE)-PRIO_SOL)
 # ---------------- genomes ----------------
-STYLES=["sniper","momentum","dip","copy","migration"]
+STYLES=["sniper","momentum","dip","copy","migration","sniper_strict"]
 RANGES=dict(min_age=(3,90),max_age=(20,900),min_up=(2,30),min_mcap=(29,120),max_mcap=(40,380),min_inflow=(0.5,30),min_ratio=(1.0,4.0),
     min_from_peak=(0.5,0.98),max_avg_up=(0.3,6.0),mom10=(-0.05,0.4),dip_dd=(0.2,0.6),rebound=(0.03,0.3),fresh_s=(2,40),max_early=(5,40),
-    stop=(-0.35,-0.04),tp1=(0.1,1.5),tp1_frac=(0.2,0.8),trail=(0.05,0.4),fade_s=(10,180),fade_r=(-0.05,0.15),max_hold=(30,1800),size_pct=(0.03,0.2),social=(0,1))
+    stop=(-0.35,-0.04),tp1=(0.1,1.5),tp1_frac=(0.2,0.8),trail=(0.05,0.4),fade_s=(10,180),fade_r=(-0.05,0.15),max_hold=(30,1800),size_pct=(0.03,0.2),social=(0,1),
+    consensus=(1,3.49),window_s=(30,900),max_lag_s=(3,60),min_wret=(0,150),max_wtrades=(30,600),follow_sells=(0,1),max_daily=(2,8))
 def rand_genome(style=None,rng=random):
     g={k:rng.uniform(*v) for k,v in RANGES.items()};g["style"]=style or rng.choice(STYLES[:3]);g["social"]=round(g["social"]);return g
 def mutate(g,rng=random,rate=0.3,scale=0.2):
@@ -74,8 +75,11 @@ def wants_entry(g,c,ts):
     if g["social"] and c.social_ok is False:return "no socials"
     if c.early_pct>g["max_early"]:return f"snipers {c.early_pct:.0f}%"
     st=g["style"]
-    if st=="copy":
-        return None if c.flag_copy and c.mcap<=g["max_mcap"] else "no top-trader buy"
+    if st=="copy":return copy_entry(g,c,ts)
+    if st=="sniper_strict":
+        if c.social_ok is not True:return "no real socials"
+        if c.dev_pct>5:return f"dev {c.dev_pct:.0f}% > 5%"
+        if c.early_pct>15:return f"snipers {c.early_pct:.0f}% > 15%"
     if st=="migration":
         return None if 300<=c.mcap<=380 and c.change(ts,30)>0 and ts-c.last_up<=g["fresh_s"] else "not near graduation"
     if a>g["max_age"]:return "too old"
@@ -106,3 +110,43 @@ def exit_reason(g,c,pos,ts):
     if held>=g["max_hold"]:return (f"time {r:+.0%}",1)
     if c.graduated and g["style"]!="migration":return (f"graduated {r:+.0%}",1)
     return None
+
+def copy_entry(g,c,ts):
+    """Copy-trade: smart wallets (filtered) bought this coin recently; enough distinct wallets agree; we are not too late."""
+    sig=[x for x in (c.flag_copy or []) if ts-x[0]<=g["window_s"] and x[2]>=g["min_wret"] and x[3]<=g["max_wtrades"] and x[1] not in g.get("avoid_wallets",[])]
+    if not sig:return "no smart-wallet buy"
+    w={x[1] for x in sig}
+    if len(w)<round(g["consensus"]):return f"{len(w)}/{round(g['consensus'])} wallets agree"
+    if ts-max(x[0] for x in sig)>g["max_lag_s"]:return "copy signal too old"
+    if c.mcap>g["max_mcap"]:return f"mcap {c.mcap:.0f} > {g['max_mcap']:.0f}"
+    if c.mcap<g.get("min_mcap_copy",0):return "mcap below lesson floor"
+    if c.graduated:return "graduated"
+    return None
+def copy_genome(rng=random):
+    g=rand_genome("momentum",rng);g.update(style="copy",consensus=rng.choice([1,2,2,2,3]),window_s=rng.uniform(60,600),max_lag_s=rng.uniform(5,40),min_wret=rng.uniform(10,80),
+        max_wtrades=rng.uniform(80,500),follow_sells=rng.choice([0,1]),max_mcap=rng.uniform(80,380),size_pct=rng.uniform(0.18,0.32),max_daily=rng.uniform(3,7),
+        stop=rng.uniform(-0.35,-0.18),tp1=rng.uniform(0.4,1.2),tp1_frac=rng.uniform(0.3,0.6),trail=rng.uniform(0.15,0.35),fade_s=rng.uniform(120,600),fade_r=rng.uniform(-0.1,0.05),max_hold=rng.uniform(600,3600),avoid_wallets=[])
+    return g
+def lessons(g,trades):
+    """Replacement bots learn from the bot they replace. trades: list of dict(ret, entry_mcap, held_s, exit, wallets)."""
+    g=copy.deepcopy(g);notes=[]
+    los=[t for t in trades if t["ret"]<=0];win=[t for t in trades if t["ret"]>0]
+    if not los:return g,notes
+    import statistics as S
+    lm=S.median(t["entry_mcap"] for t in los)
+    if win:
+        wm=S.median(t["entry_mcap"] for t in win)
+        if lm>wm*1.15:g["max_mcap"]=min(g["max_mcap"],(lm+wm)/2);notes.append(f"losers entered higher (median {lm:.0f} vs {wm:.0f} SOL mc) → max entry {g['max_mcap']:.0f} SOL")
+        elif lm<wm*0.85:g["min_mcap_copy"]=g["min_mcap"]=max(g.get("min_mcap",0),(lm+wm)/2);notes.append(f"losers entered lower (median {lm:.0f} vs {wm:.0f}) → min entry {g['min_mcap']:.0f} SOL")
+    elif lm>40:g["max_mcap"]=min(g["max_mcap"],lm*0.8);notes.append(f"all losses; entries around {lm:.0f} SOL mc → max entry {g['max_mcap']:.0f} SOL")
+    fast=[t for t in los if t["exit"].startswith("stop") and t["held_s"]<30]
+    if len(fast)>=max(2,len(los)/2):
+        if g["style"]=="copy":g["consensus"]=min(3.49,g["consensus"]+1);g["max_lag_s"]=max(3,g["max_lag_s"]*0.6);notes.append("most losses were fast stop-outs → needs one more agreeing wallet and a fresher signal")
+        else:g["min_age"]=min(RANGES["min_age"][1],g["min_age"]+15);notes.append("most losses were fast stop-outs → waits 15s longer before entering")
+    bad=collections.Counter(w for t in los for w in t.get("wallets",[]))
+    good=collections.Counter(w for t in win for w in t.get("wallets",[]))
+    av=[w for w,n in bad.items() if n>=2 and good[w]==0]
+    if av:g["avoid_wallets"]=sorted(set(g.get("avoid_wallets",[]))|set(av));notes.append(f"stops copying {len(av)} wallet(s) that lost twice")
+    slow=[t for t in los if t["exit"].startswith(("faded","time"))]
+    if len(slow)>=len(los)/2:g["fade_s"]=max(RANGES["fade_s"][0],g["fade_s"]*0.7);notes.append("losses bled out slowly → exits faded coins sooner")
+    return g,notes
