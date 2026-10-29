@@ -8,9 +8,9 @@
  "start_equity": 946.78,
  "max_open_per_bot": 3,
  "bot_floor_pct": 0.5,
- "min_trades_rank": 5,
+ "min_trades_rank": 10,
  "evolve_hours": 12,
- "replace_per_epoch": 3,
+ "replace_per_epoch": 1,
  "max_watch_s": 240,
  "rpc_http_pool": [
   "https://solana-rpc.publicnode.com",

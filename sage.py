@@ -15,6 +15,8 @@ PW=os.environ.get("DASH_PASSWORD","");START=time.time()
 def now():return dt.datetime.now().isoformat(timespec="milliseconds")
 # ---------------- storage ----------------
 db=sqlite3.connect(DBF,check_same_thread=False);db.row_factory=sqlite3.Row
+try:db.execute("alter table bots add column strikes int default 0");db.commit()
+except Exception:pass
 db.executescript("""create table if not exists events(id integer primary key,ts text,agent text,tag text,msg text,mint text,sym text,pnl real);
 create table if not exists positions(id integer primary key,mint text,sym text,opened text,closed text,entry real,qty real,cost real,peak real,last real,remaining real,proceeds real default 0,fees real default 0,status text,reason text,exit_reason text,tp int default 0,creator text);
 create table if not exists equity(ts text,equity real);
@@ -24,6 +26,8 @@ create table if not exists bot_pos(id integer primary key,bot int,mint text,sym 
 create table if not exists evolutions(id integer primary key,ts text,epoch int,ranking text,removed text,added text);
 create table if not exists kv(k text primary key,v text);
 create table if not exists ticks(mint text primary key,sym text,born real,creator text,dev_pct real,social int,series text);""");db.commit()
+try:db.execute("alter table bots add column strikes int default 0");db.commit()
+except Exception:pass
 def kv(k,d=None):
     r=db.execute("select v from kv where k=?",(k,)).fetchone();return json.loads(r[0]) if r else d
 def kvset(k,v):db.execute("insert or replace into kv values(?,?)",(k,json.dumps(v)));db.commit()
@@ -187,12 +191,20 @@ async def dev_watch():
                 b=await dev_balance(c.creator,mint)
                 if b is not None and b<1e7*c.dev_pct*0.5:c.dev_sold=True;A["RISK"].say("WARN",f"${c.sym} dev wallet sold - forcing exits",mint,c.sym,head=True)
 # ---------------- TRACKER (part of SCOUT): top wallets via logsSubscribe ----------------
-TRACKED={}
+TRACKED={};BENCHED=set(kv("benched",[]) or []);WSTREAK=collections.Counter();WSWAP=[False]
+def wallet_result(who,win):
+    """Copied wallets: 2 straight losing copies -> swap the wallet for the next one on the leaderboard."""
+    w=next((a for a,h in TRACKED.items() if h==who),None)
+    if not w:return
+    WSTREAK[w]=0 if win else WSTREAK[w]+1
+    if WSTREAK[w]>=2:
+        BENCHED.add(w);kvset("benched",list(BENCHED));WSWAP[0]=True
+        A["RISK"].say("EVOLVE",f"copied wallet {who} benched after 2 straight losing copies - swapping in the next leaderboard wallet",head=True)
 async def wallets():
     sc=A["SCOUT"]
     while True:
-        d=await jget("https://api.fomo-api.com/v1/leaderboard?window=7d&board=solana&limit=10",15)
-        rows=(d or {}).get("data") or []
+        d=await jget("https://api.fomo-api.com/v1/leaderboard?window=7d&board=solana&limit=50",15)
+        rows=[r for r in ((d or {}).get("data") or []) if r["address"] not in BENCHED][:10]
         if rows:TRACKED.clear();TRACKED.update({r["address"]:(r.get("handle") or r["address"][:6]) for r in rows})
         if not TRACKED:await asyncio.sleep(600);continue
         try:
@@ -200,9 +212,11 @@ async def wallets():
                 ids={}
                 for i,w in enumerate(TRACKED):ids[i+1]=w;await ws.send(json.dumps({"jsonrpc":"2.0","id":i+1,"method":"logsSubscribe","params":[{"mentions":[w]},{"commitment":"confirmed"}]}))
                 subs={};sc.say("INFO",f"watching {len(TRACKED)} top wallets on-chain (fomo-api.com 7d PnL top 10)")
-                end=time.time()+1800
-                while time.time()<end:
-                    raw=await asyncio.wait_for(ws.recv(),900);d=json.loads(raw)
+                end=time.time()+1800;WSWAP[0]=False
+                while time.time()<end and not WSWAP[0]:
+                    try:raw=await asyncio.wait_for(ws.recv(),30)
+                    except asyncio.TimeoutError:continue
+                    d=json.loads(raw)
                     if "id" in d and isinstance(d.get("result"),int):subs[d["result"]]=ids.get(d["id"]);continue
                     p=d.get("params") or {};w=subs.get(p.get("subscription"))
                     if w and not p["result"]["value"].get("err"):asyncio.create_task(decode_wallet(w,p["result"]["value"]["signature"]))
@@ -224,7 +238,7 @@ async def decode_wallet(w,sig):
 class Bot:
     def __init__(s,row):
         s.id=row["id"];s.name=row["name"];s.gen=row["gen"];s.g=json.loads(row["genome"]);s.style=row["style"];s.cash=row["cash"];s.start=row["start_cash"]
-        s.parents=row["parents"];s.status=row["status"];s.epoch_start=row["epoch_start"] or time.time();s.pos={}   # mint -> pos dict
+        s.strikes=row["strikes"] or 0;s.parents=row["parents"];s.status=row["status"];s.epoch_start=row["epoch_start"] or time.time();s.pos={}   # mint -> pos dict
     def equity(s):return s.cash+sum(p["tok"]*strat.mid(COINS[m])*SOL[0] for m,p in s.pos.items() if m in COINS)+sum(p.get("stale",0) for m,p in s.pos.items() if m not in COINS)
     def closed(s,since=None):
         q="select cost,proceeds from bot_pos where bot=? and status='closed'"+(" and opened_ts>=?" if since else "")
@@ -241,6 +255,11 @@ def new_bot(g,gen,parents,cash,note=""):
 def load_bots():
     for row in db.execute("select * from bots where status='alive'"):
         b=Bot(row);BOTS[b.id]=b
+        k=0
+        for r in db.execute("select proceeds,cost from bot_pos where bot=? and status='closed' order by id desc",(b.id,)):
+            if r[0]>r[1]:break
+            k+=1
+        b.strikes=k
         for p in db.execute("select * from bot_pos where bot=? and status='open'",(b.id,)):
             b.pos[p["mint"]]=dict(id=p["id"],entry_mcap=p["entry_mcap"],peak_mcap=p["peak_mcap"],opened=p["opened_ts"],tp_done=bool(p["tp_done"]),tok=p["tok"],cost=p["cost"],got=p["proceeds"],sym=p["sym"])
             if p["mint"] not in COINS and p["curve"]:   # resume: re-poll its curve after restart
@@ -319,7 +338,7 @@ class Executor:
             b.cash-=usd_sz
             cur=db.execute("insert into bot_pos(bot,mint,sym,curve,opened,opened_ts,entry_mcap,peak_mcap,tok,tok0,cost,status,reason,sol_px) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",(b.id,mint,c.sym,CURVE.get(mint),now(),ts,c.mcap,c.mcap,tok,tok,usd_sz,"open",o["why"],SOL[0]))
             db.execute("update bots set cash=? where id=?",(b.cash,b.id))
-            b.pos[mint]=dict(id=cur.lastrowid,entry_mcap=c.mcap,peak_mcap=c.mcap,opened=ts,tp_done=False,tok=tok,cost=usd_sz,got=0.0,sym=c.sym)
+            b.pos[mint]=dict(id=cur.lastrowid,entry_mcap=c.mcap,peak_mcap=c.mcap,opened=ts,tp_done=False,tok=tok,cost=usd_sz,got=0.0,sym=c.sym,wallet=c.flag_copy if b.style=="copy" else None)
             STATS["buys"]+=1;ex.total=STATS["buys"];hop("EXECUTOR","RISK")
             ex.live("↗",f"{b.name} buy ${c.sym} {sol:.2f} SOL @ {c.mcap:.0f} SOL mc")
             ex.say("BUY",f"{b.name} BUY ${c.sym} ${usd_sz:.2f} ({sol:.2f} SOL) at {c.mcap:.0f} SOL mc · {o['why']}",mint,c.sym,head=True)
@@ -332,6 +351,8 @@ class Executor:
                 b.cash+=p["tok"]*0;pnl=p["got"]-p["cost"];del b.pos[mint]
                 db.execute("update bot_pos set tok=0,proceeds=?,status='closed',closed=?,exit_reason=coalesce(exit_reason||'; ','')||? where id=?",(p["got"],now(),o["why"],p["id"]))
                 STATS["closed"]+=1;STATS["wins" if pnl>0 else "losses"]+=1
+                b.strikes=0 if pnl>0 else b.strikes+1;db.execute("update bots set strikes=? where id=?",(b.strikes,b.id))
+                if p.get("wallet"):wallet_result(p["wallet"],pnl>0)
                 if "stop" in o["why"]:STATS["stops"]+=1;A["RISK"].total=STATS["stops"]
                 ex.live("✓" if pnl>0 else "✕",f"{b.name} sold ${c.sym} {'+' if pnl>=0 else '−'}${abs(pnl):.2f} ({o['why']})")
                 ex.say("SELL",f"{b.name} SOLD ${c.sym} {'+' if pnl>=0 else '-'}${abs(pnl):.2f} ({pnl/p['cost']:+.0%}) · {o['why']}",mint,c.sym,round(pnl,2),head=True)
@@ -389,41 +410,39 @@ def score(b):
     rs=[(r["proceeds"]-r["cost"])/r["cost"] for r in b.closed(b.epoch_start) if r["cost"]>0];n=len(rs)
     if n<CFG()["min_trades_rank"]:return None,n
     m=sum(rs)/n;sd=math.sqrt(sum((x-m)**2 for x in rs)/max(n-1,1))+1e-6;return m/sd*math.sqrt(n),n
+def leaders_for(excl):
+    al=[x for x in BOTS.values() if x is not excl and x.strikes<3 and x.equity()>=x.start*0.85]
+    return sorted(al,key=lambda x:-(x.equity()/max(x.start,1e-9)))[:3]
+def replace_bot(b,why):
+    """Liquidate b at market, spawn a mutation/crossover of the current leaders with b's remaining capital."""
+    if b.id not in BOTS:return
+    for mint in list(b.pos):
+        if COINS.get(mint):EXEC.fill(dict(bot=b.id,side="sell",frac=1.0,why="bot replaced",t=0),mint,time.time())
+    pool=b.equity();db.execute("update bots set status='replaced',died=?,cash=0,note=? where id=?",(now(),why,b.id));BOTS.pop(b.id)
+    L=leaders_for(b);rng=random.Random()
+    if len(L)>=2 and rng.random()<0.4:x,y=rng.sample(L,2);g=strat.mutate(strat.crossover(x.g,y.g,rng),rng,0.2,0.1);par=f"{x.name}×{y.name}";gen=max(x.gen,y.gen)+1
+    elif L:x=L[0] if rng.random()<0.6 else rng.choice(L);g=strat.mutate(x.g,rng);par=x.name;gen=x.gen+1
+    else:g=strat.mutate(b.g,rng,0.6,0.3);par=b.name+" (re-roll)";gen=b.gen+1
+    if b.style in("copy","migration"):g["style"]=b.style   # keep live-only styles in the population
+    nb=new_bot(g,gen,par,pool,f"replaced {b.name}: {why}")
+    STATS["replaced"]+=1;db.execute("insert into evolutions(ts,epoch,ranking,removed,added) values(?,?,?,?,?)",(now(),kv("epoch",0),json.dumps(why),json.dumps([b.name]),json.dumps([nb.name])));db.commit()
+    A["RISK"].say("EVOLVE",f"{b.name} out ({why}) → {nb.name} born from {par} with ${pool:.2f}",head=True)
+def check_strikes(b):
+    if b.id not in BOTS:return
+    dd=1-b.equity()/max(b.start,1e-9)
+    if b.strikes>=3:replace_bot(b,"3 losses in a row")
+    elif dd>0.15:replace_bot(b,f"drawdown {dd:.0%} of allocation")
 async def evolution():
-    rk=A["RISK"]
     while True:
         await asyncio.sleep(30)
-        t0=kv("epoch_t0",time.time());per=CFG()["evolve_hours"]*3600
-        if time.time()-t0<per:continue
-        ep=kv("epoch",0)+1;rows=[]
-        for b in BOTS.values():
-            s,n=score(b);rows.append((b,s,n,b.equity()-b.start))
-        ranked=sorted([r for r in rows if r[1] is not None],key=lambda r:-r[1])
-        idle=[r for r in rows if r[1] is None and r[2]==0]
-        k=CFG()["replace_per_epoch"]
-        losers=[r[0] for r in ranked[::-1] if r[1]<0 or r[3]<0][:k]
-        losers+= [r[0] for r in idle if r[0] not in losers][:max(0,k-len(losers))]
-        leaders=[r[0] for r in ranked if r[0] not in losers][:3] or [r[0] for r in rows if r[0] not in losers][:3]
-        pool=0;added=[]
-        for b in losers:   # liquidate at market
-            for mint in list(b.pos):
-                c=COINS.get(mint)
-                if c:EXEC.fill(dict(bot=b.id,side="sell",frac=1.0,why="bot replaced",t=0),mint,time.time())
-            pool+=b.equity();db.execute("update bots set status='replaced',died=?,cash=0 where id=?",(now(),b.id));BOTS.pop(b.id)
-        rng=random.Random()
-        for i,_ in enumerate(losers):
-            if len(leaders)>=2 and i==len(losers)-1:a,bb=rng.sample(leaders,2);g=strat.mutate(strat.crossover(a.g,bb.g,rng),rng,0.2,0.1);par=f"{a.name}×{bb.name}"
-            else:a=leaders[i%len(leaders)];g=strat.mutate(a.g,rng);par=a.name
-            added.append(new_bot(g,max(x.gen for x in leaders)+1 if leaders else ep,par,0,f"epoch {ep} child"))
-        if added or pool:
-            base=pool*0.5/max(len(added),1)
-            for nb in added:nb.cash=nb.start=base;db.execute("update bots set cash=?,start_cash=? where id=?",(base,base,nb.id))
-            rest=pool-base*len(added);ws=[3,2,1][:len(leaders)]
-            for w,l in zip(ws,leaders):l.cash+=rest*w/sum(ws);db.execute("update bots set cash=? where id=?",(l.cash,l.id))
-        for b in BOTS.values():b.start=b.equity();b.epoch_start=time.time();db.execute("update bots set start_cash=?,epoch_start=? where id=?",(b.start,b.epoch_start,b.id))
-        db.execute("insert into evolutions(ts,epoch,ranking,removed,added) values(?,?,?,?,?)",(now(),ep,json.dumps([[r[0].name,r[1],r[2],round(r[3],2)] for r in rows]),json.dumps([b.name for b in losers]),json.dumps([b.name for b in added])))
-        kvset("epoch",ep);kvset("epoch_t0",time.time());db.commit()
-        rk.say("EVOLVE",f"Epoch {ep}: replaced {', '.join(b.name for b in losers) or 'nobody'} → {', '.join(b.name+' ('+b.parents+')' for b in added) or '-'}; capital to {', '.join(l.name for l in leaders)}",head=True)
+        for b in list(BOTS.values()):
+            check_strikes(b)
+        if time.time()-kv("epoch_t0",time.time())<CFG()["evolve_hours"]*3600:continue
+        ep=kv("epoch",0)+1;kvset("epoch",ep);kvset("epoch_t0",time.time())
+        el=[b for b in BOTS.values() if len(b.closed())>=10]
+        if el:
+            w=min(el,key=lambda b:b.equity()/max(b.start,1e-9));replace_bot(w,f"epoch {ep}: worst bot with 10+ trades")
+        else:A["RISK"].say("EVOLVE",f"epoch {ep}: no bot has 10+ trades yet - nobody culled",head=True)
 async def watchdog():
     rk=A["RISK"]
     while True:
@@ -456,7 +475,7 @@ def bots_view():
     out=[]
     for b in BOTS.values():
         cl=b.closed();w=sum(1 for r in cl if r["proceeds"]>r["cost"]);s,n=score(b)
-        out.append(dict(id=b.id,name=b.name,gen=b.gen,style=b.style,parents=b.parents,equity=round(b.equity(),2),start=round(b.start,2),pnl=round(b.equity()-b.start,2),trades=len(cl),wins=w,open=len(b.pos),score=None if s is None else round(s,2),status="alive"))
+        out.append(dict(id=b.id,name=b.name,gen=b.gen,style=b.style,parents=b.parents,equity=round(b.equity(),2),start=round(b.start,2),pnl=round(b.equity()-b.start,2),trades=len(cl),wins=w,open=len(b.pos),strikes=b.strikes,dd=round(100*(1-b.equity()/max(b.start,1e-9)),1),score=None if s is None else round(s,2),status="alive"))
     out.sort(key=lambda x:-x["pnl"])
     for r in db.execute("select name,gen,style,parents,died from bots where status='replaced' order by id desc limit 6"):out.append(dict(name=r["name"],gen=r["gen"],style=r["style"],parents=r["parents"],status="replaced",died=r["died"]))
     return out
