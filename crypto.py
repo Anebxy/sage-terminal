@@ -4,7 +4,7 @@ import asyncio,json,time,os,datetime as dt
 import cbt
 FEE,SLIP=cbt.FEE,cbt.SLIP
 CHARTERS={
- "EXECUTIVE":"Splits paper capital: ~90% crypto desk, ~10% memecoin sniper. Only funds configs that were positive on held-out data after fees.",
+ "EXECUTIVE":"Splits paper capital: 80% memecoin desk, 20% crypto trend backup (owner choice). Only funds configs that were positive on held-out data after fees.",
  "SCREENER":"Pulls 1H candles (4H built from them) for the 10-coin universe from Binance public data every minute; flags coins whose 4H trend is up.",
  "ENTRY PLANNER":"On each closed 1H bar, checks each funded config's setup (trend breakout or oversold bounce). Plans entry, stop (ATR-based) and target before any buy.",
  "RISK OFFICER":"Sizes every trade so hitting the stop loses 1.5% of the config's capital; caps a position at 35% and 4 open per config. Vetoes trades with no valid stop.",

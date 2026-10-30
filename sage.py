@@ -10,7 +10,7 @@ import strat
 DATA=os.environ.get("DATA_DIR") or D
 try:os.makedirs(DATA,exist_ok=True);open(f"{DATA}/.w","w").close()
 except Exception:DATA=D
-DBF=f"{DATA}/sage_v9.db";CFG=lambda:json.load(open(f"{D}/config.json"))
+DBF=f"{DATA}/sage_v10.db";CFG=lambda:json.load(open(f"{D}/config.json"))
 PW=os.environ.get("DASH_PASSWORD","");START=time.time()
 def now():return dt.datetime.now().isoformat(timespec="milliseconds")
 # ---------------- storage ----------------
@@ -199,7 +199,7 @@ async def deep_check(mint):
     m["deep"]="pending";f=A["FILTER"];f.live("⌕",f"RugCheck + dev wallet ${m['sym']}");chk(mint,"dev wallet","…");chk(mint,"RugCheck","…")
     if c.dev_pct>0.05 and c.creator:
         b=await dev_balance(c.creator,mint)
-        if b is not None and b<1e7*c.dev_pct*0.5:c.dev_sold=True
+        if b is not None and b<1e7*c.dev_pct*0.5:c.dev_sold=True;mark_rugger(c)
     chk(mint,"dev wallet","sold" if c.dev_sold else f"holds · bought {c.dev_pct:.1f}%")
     r=await jget(f"https://api.rugcheck.xyz/v1/tokens/{mint}/report",6);m["rug_ok"]=bool(r)
     sym_=((r or {}).get("tokenMeta") or {}).get("symbol")
@@ -226,7 +226,7 @@ async def dev_watch():
             c=COINS[mint]
             if c.dev_pct>0.05 and not c.dev_sold:
                 b=await dev_balance(c.creator,mint)
-                if b is not None and b<1e7*c.dev_pct*0.5:c.dev_sold=True;A["RISK"].say("WARN",f"${c.sym} dev wallet sold - forcing exits",mint,c.sym,head=True)
+                if b is not None and b<1e7*c.dev_pct*0.5:c.dev_sold=True;mark_rugger(c);A["RISK"].say("WARN",f"${c.sym} dev wallet sold - forcing exits",mint,c.sym,head=True)
 # ---------------- TRACKER (part of SCOUT): top wallets via logsSubscribe ----------------
 TRACKED={};BENCHED=set(kv("benched",[]) or []);WSTREAK=collections.Counter();WSWAP=[False]
 def wallet_result(w,win):
@@ -366,7 +366,21 @@ def load_bots():
             b.pos[p["mint"]]=dict(id=p["id"],entry_mcap=p["entry_mcap"],peak_mcap=p["peak_mcap"],opened=p["opened_ts"],tp_done=bool(p["tp_done"]),tok=p["tok"],cost=p["cost"],got=p["proceeds"],sym=p["sym"],wallets=json.loads(p["wallets"] or "[]"))
             if p["mint"] not in COINS and p["curve"]:   # resume: re-poll its curve after restart
                 c=strat.Coin(p["mint"],p["sym"],p["opened_ts"]-60,None,0,p["entry_mcap"]);COINS[p["mint"]]=c;CURVE[p["mint"]]=p["curve"];META[p["mint"]]=dict(sym=p["sym"],stage="held",series=[],last_reason=collections.Counter(),deep="ok")
-    if not BOTS:seed_v9()
+    if not BOTS:seed_v10()
+def ETday():
+    from zoneinfo import ZoneInfo;return dt.datetime.now(ZoneInfo("America/New_York")).date().isoformat()
+def heldout_pool():
+    r=json.load(open(f"{D}/bt_result.json"))["bots"]
+    p=[x for x in r if x["genome"]["style"] in("sniper","momentum") and x["holdout"]["n"]>=25 and x["holdout"]["mean"]>0 and x["train"]["mean"]>0]
+    p.sort(key=lambda x:-x["holdout"]["mean"]);return p
+def v10_genome(x):
+    g=dict(x["genome"]);g.update(size_pct=0.065,max_daily=8);return g
+def held_note(x):return f"held-out n={x['holdout']['n']} {x['holdout']['mean']:+.1%}/trade, win {x['holdout']['win']:.0%} (train n={x['train']['n']} {x['train']['mean']:+.1%})"
+def seed_v10():
+    """v10: memecoin desk = every sniper/momentum genome positive on BOTH train and held-out tapes, equal split of 80% of $1,000."""
+    c=CFG();P=heldout_pool();cap=c["start_equity"]*c["alloc"]["meme"]
+    for i,x in enumerate(P):new_bot(v10_genome(x),0,f"heldout#{i}",cap/len(P),held_note(x))
+    kvset("used_cfg",list(range(len(P))));kvset("desk_start",cap);kvset("desk_t0",time.time());kvset("epoch",0);kvset("epoch_t0",time.time());kvset("v6",1);kvset("v7",1)
 def seed_v9():
     """v9: memecoin desk = ONE strict sniper, the best held-out sniper genome (train n41 +10.9%/trade, held-out n28 +13.5%/trade), 10% of $1,000."""
     c=CFG();r=json.load(open(f"{D}/bt_result.json"))["bots"]
@@ -454,12 +468,32 @@ async def approve(b,mint):
                 await asyncio.sleep(0.3)
                 if m.get("deep")!="pending":break
     if m.get("deep")!="ok" or (b.id,mint) in DONE or mint in b.pos:return
-    if b.style=="sniper_strict" and not m.get("rug_ok"):chk(mint,verdict="strict sniper: RugCheck not indexed");return
+    rg=rug_guard(c,m)
+    if rg:chk(mint,verdict="rug guard: "+rg);KILLS["rug guard: "+rg.split(" (")[0]]+=1;return
     v=risk_veto(b,c)
     if v:A["RISK"].live("⛔",f"{b.name} ${c.sym} veto: {v}");chk(mint,"risk",v);return
     chk(mint,"risk","approved",verdict=f"→ {b.name} buying")
     DONE.add((b.id,mint));EXEC.order(b,mint,"buy",1.0,f"{b.style}: {c.up}↑/{c.down}↓, +{c.inflow:.1f} SOL in, {c.mcap:.0f} SOL mc, age {time.time()-c.born:.0f}s")
+RUGGERS=set(kv("ruggers",[]) or [])
+def rug_guard(c,m):
+    """Strict rug guard applied to every bot: RugCheck indexed with mint+freeze revoked (deep_check), top10<=35%, dev<=5%, curve liquidity, dev's past coins."""
+    if not m.get("rug_ok"):return "RugCheck not indexed"
+    if c.dev_pct>5:return f"dev holds {c.dev_pct:.1f}% (>5%)"
+    if c.dev_sold:return "dev sold"
+    if m.get("top10") is None:return "top holders unknown"
+    if c.vsol-30<CFG().get("min_liq_sol",3):return f"liquidity {max(0,c.vsol-30):.1f} SOL in curve (<{CFG().get('min_liq_sol',3)})"
+    if c.creator and c.creator in RUGGERS:return "dev rugged a previous coin"
+    return None
+def mark_rugger(c):
+    if c and c.creator and c.creator not in RUGGERS:RUGGERS.add(c.creator);kvset("ruggers",list(RUGGERS)[-5000:])
+def meme_eq():return desk_equity()
+def day_guard():
+    d=ETday();st=kv("day_start",{}) or {}
+    if st.get("d")!=d:st=dict(d=d,eq=meme_eq());kvset("day_start",st)
+    return st
 def risk_veto(b,c):
+    st=day_guard()
+    if meme_eq()<st["eq"]*0.9:return f"desk down {1-meme_eq()/st['eq']:.0%} today (ET) - paused until tomorrow"
     if os.path.exists(f"{DATA}/KILL") or CFG().get("kill_switch"):return "kill switch"
     if len(b.pos)>=CFG()["max_open_per_bot"]:return f"max {CFG()['max_open_per_bot']} open"
     eq=b.equity()
@@ -583,6 +617,17 @@ def replace_bot(b,why):
     for mint in list(b.pos):
         if COINS.get(mint):EXEC.fill(dict(bot=b.id,side="sell",frac=1.0,why="bot replaced",t=0),mint,time.time())
     pool=b.equity();db.execute("update bots set status='replaced',died=?,cash=0,note=? where id=?",(now(),why,b.id));BOTS.pop(b.id)
+    P=heldout_pool();used=kv("used_cfg",[]) or [];nxt=[i for i in range(len(P)) if i not in used]
+    if nxt:
+        i=nxt[0];kvset("used_cfg",used+[i]);nb=new_bot(v10_genome(P[i]),b.gen+1,f"heldout#{i}",pool,held_note(P[i]))
+        nb.lessons=f"Replaces {b.name}, deleted for: {why}. Same deletion rules apply to me.";db.execute("update bots set lessons=? where id=?",(nb.lessons,nb.id))
+        db.execute("insert into evolutions(ts,epoch,ranking,removed,added) values(?,?,?,?,?)",(now(),kv("epoch",0),json.dumps(why),json.dumps([b.name]),json.dumps([nb.name])));db.commit()
+        A["RISK"].say("EVOLVE",f"{b.name} deleted ({why}) → {nb.name}, next held-out config, gets ${pool:.2f}",head=True);return
+    if BOTS:
+        best=max(BOTS.values(),key=lambda x:x.equity()/max(x.start,1e-9));best.cash+=pool;best.start+=pool
+        db.execute("update bots set cash=?,start_cash=? where id=?",(best.cash,best.start,best.id))
+        db.execute("insert into evolutions(ts,epoch,ranking,removed,added) values(?,?,?,?,?)",(now(),kv("epoch",0),json.dumps(why),json.dumps([b.name]),json.dumps([])));db.commit()
+        A["RISK"].say("EVOLVE",f"{b.name} deleted ({why}). No untested held-out-positive config left, so ${pool:.2f} moved to {best.name}",head=True);return
     L=leaders_for(b);rng=random.Random()
     if len(L)>=2 and rng.random()<0.4:x,y=rng.sample(L,2);g=strat.mutate(strat.crossover(x.g,y.g,rng),rng,0.2,0.1);par=f"{x.name}×{y.name}";gen=max(x.gen,y.gen)+1
     elif L:x=L[0] if rng.random()<0.6 else rng.choice(L);g=strat.mutate(x.g,rng);par=x.name;gen=x.gen+1
@@ -601,8 +646,9 @@ def replace_bot(b,why):
 def check_strikes(b):
     if b.id not in BOTS:return
     dd=1-b.equity()/max(b.start,1e-9)
-    if b.strikes>=3:replace_bot(b,"3 losses in a row")
-    elif dd>0.15:replace_bot(b,f"drawdown {dd:.0%} of allocation")
+    cl=b.closed();net=sum(r["proceeds"]-r["cost"] for r in cl)
+    if dd>0.15:replace_bot(b,f"drawdown {dd:.0%} of its allocation (>15%)")
+    elif len(cl)>=20 and net<0:replace_bot(b,f"{len(cl)} trades, net {'−' if net<0 else ''}${abs(net):.2f} after fees")
 async def evolution():
     while True:
         await asyncio.sleep(30)
@@ -610,10 +656,10 @@ async def evolution():
             check_strikes(b)
         if time.time()-kv("epoch_t0",time.time())<CFG()["evolve_hours"]*3600:continue
         ep=kv("epoch",0)+1;kvset("epoch",ep);kvset("epoch_t0",time.time())
-        el=[b for b in BOTS.values() if len(b.closed())>=10]
+        el=[b for b in BOTS.values() if len(b.closed())>=20 and b.equity()<b.start]
         if el:
-            w=min(el,key=lambda b:b.equity()/max(b.start,1e-9));replace_bot(w,f"epoch {ep}: worst bot with 10+ trades")
-        else:A["RISK"].say("EVOLVE",f"epoch {ep}: no bot has 10+ trades yet - nobody culled",head=True)
+            w=min(el,key=lambda b:b.equity()/max(b.start,1e-9));replace_bot(w,f"daily cull: worst net-negative bot with 20+ trades")
+        else:A["RISK"].say("EVOLVE",f"daily cull: no net-negative bot with 20+ trades - nobody deleted",head=True)
 async def watchdog():
     rk=A["RISK"]
     while True:
@@ -751,7 +797,7 @@ def totals():
     s0=kv("bench_sol0");bench=c["start_equity"]*sol/s0 if sol and s0 else c["start_equity"]
     return dict(total=round(ce+me,4),crypto=round(ce,4),meme=round(me,4),bench=round(bench,4),start=c["start_equity"])
 async def exec_loop():
-    c=CFG();A["EXECUTIVE"].say("INFO",f"Allocation: {c['alloc']['crypto']:.0%} crypto desk (3 held-out-positive trend configs), {c['alloc']['meme']:.0%} memecoin strict sniper. Reason: crypto trend configs were positive held-out after fees over ~5 months; memecoin edge is unproven (2h held-out), so it stays small.",head=True)
+    c=CFG();A["EXECUTIVE"].say("INFO",f"Allocation (owner's choice): {c['alloc']['meme']:.0%} memecoin desk ({len(BOTS)} held-out-positive bots, strict rug guard), {c['alloc']['crypto']:.0%} crypto trend backup. Caveat: memecoin held-out window is ~2h of tapes; crypto held-out is ~5 months.",head=True)
     last=0
     while True:
         t=totals()
@@ -763,6 +809,38 @@ def v9view():
     return dict(t=t,alloc=c["alloc"],crypto=CD.view(),score=CD.scorecard(kv("bench_t0"),kv("bench_sol0")),meme=dict(bots=bots_view(),board=board(),stats=stats()),
         agents=[dict(a.view(),charter=crypto.CHARTERS.get(a.name,a.role)) for a in A.values()],server_now=time.time(),
         log=[dict(r) for r in db.execute("select ts,agent,tag,msg,pnl from events order by id desc limit 80")])
+def stopline(b,p):
+    st=p["entry_mcap"]*(1+b.g["stop"])
+    if p["tp_done"]:st=max(st,p["peak_mcap"]*(1-b.g["trail"]))
+    return st
+def v10view():
+    v=v9view();ts=time.time()
+    for h in v["meme"]["board"]["holding"]:
+        b=next((x for x in BOTS.values() if h["mint"] in x.pos),None)
+        if b:p=b.pos[h["mint"]];h["stop_mcap"]=round(stopline(b,p),2);h["stack_pct"]=round(100*p["cost"]/max(b.equity(),1e-9),1);h["trail"]=b.g["trail"];h["tp1"]=b.g["tp1"]
+    st=day_guard();me=meme_eq()
+    v["v10"]=dict(stats=dict(seen=STATS["seen"],killed=STATS["killed"],signals=STATS["signals"],buys=STATS["buys"],closed=STATS["closed"],watching=len(COINS),passed=sum(1 for m in META.values() if m.get("deep")=="ok"),scoring=sum(1 for m in META.values() if m.get("deep")=="pending")),
+        kills=KILLS.most_common(8),recent_kills=[dict(sym=m.get("sym"),why=m.get("killed")) for m in list(META.values())[-60:] if m.get("killed")][-6:][::-1],
+        day=dict(d=st["d"],start=round(st["eq"],2),now=round(me,2),paused=me<st["eq"]*0.9),
+        rules=dict(desc=["stop set before entry (per bot genome)","partial take at TP1, then trailing stop","stake ~6.5% of bot stack per coin","desk pauses if down 10% on the ET day","delete bot: >=20 trades & net loss, or drawdown >15%","daily cull: worst net-negative bot with >=20 trades"]),
+        last_trail=next((dict(r) for r in db.execute("select sym,proceeds-cost pnl,exit_reason,closed from bot_pos where status='closed' and (exit_reason like '%trail%' or exit_reason like '%stop%') order by id desc limit 1")),None),
+        watch=[dict(sym=c.sym,mint=m,mcap=round(c.mcap*SOL[0]),ch=round((c.mcap/c.hist[0][1]-1)*100,1) if c.hist else 0) for m,c in list(COINS.items())[-200:] if not META[m].get("killed") and META[m].get("deep")=="ok"][-8:][::-1],
+        sol=SOL[0],ruggers=len(RUGGERS))
+    return v
+async def api_v10(req):return web.json_response(v10view(),headers={"Cache-Control":"no-store"})
+async def api_token(req):
+    mint=req.query.get("mint","");c=COINS.get(mint);m=META.get(mint)
+    r=db.execute("select p.*,b.name bn,b.genome g from bot_pos p join bots b on b.id=p.bot where p.mint=? order by p.id desc limit 1",(mint,)).fetchone()
+    ser=(m or {}).get("series") or []
+    if not ser:
+        t=db.execute("select series from ticks where mint=?",(mint,)).fetchone();ser=json.loads(t[0]) if t else []
+    out=dict(mint=mint,sym=(m or {}).get("sym") or (r["sym"] if r else mint[:4]),chain="Solana · pump.fun",born=c.born if c else None,sol=SOL[0],
+        mcap=c.mcap if c else None,liq=(c.vsol-30) if c else None,top10=(m or {}).get("top10"),series=ser[-600:],buys=c.up if c else None,sells=c.down if c else None,vol=(c.inflow+c.outflow) if c else None)
+    if r:
+        g=json.loads(r["g"]);b=BOTS.get(r["bot"]);p=b.pos.get(mint) if b else None
+        out["pos"]=dict(bot=r["bn"],status=r["status"],entry=r["entry_mcap"],cost=r["cost"],proceeds=r["proceeds"],opened=r["opened_ts"],exit=r["exit_reason"],
+            stop=stopline(b,p) if p else r["entry_mcap"]*(1+g["stop"]),value=(p["tok"]*strat.mid(c)*SOL[0]+p["got"]) if (p and c) else r["proceeds"],stop_pct=g["stop"],trail=g["trail"],tp1=g["tp1"])
+    return web.json_response(out,headers={"Cache-Control":"no-store"})
 async def api_v9(req):return web.json_response(v9view(),headers={"Cache-Control":"no-store"})
 async def api_eq2(req):
     sec={"1h":3600,"6h":21600,"1d":86400,"1w":604800}.get(req.query.get("tf","1d"),10**10)
@@ -780,10 +858,10 @@ async def main():
     app=web.Application(middlewares=[auth])
     app.router.add_get("/healthz",healthz)
     app.router.add_get("/login",static("login.html"));app.router.add_post("/login",login_post);app.router.add_get("/logout",logout)
-    for n in ("manifest.json","icon-192.png","icon-512.png","icon-maskable-512.png","icon-1024.png","favicon-32.png","apple-touch-icon.png","favicon.ico"):app.router.add_get("/"+n,static(n))
+    for n in ("manifest.json","icon-192.png","icon-512.png","icon-maskable-512.png","icon-1024.png","favicon-32.png","avatar.png","apple-touch-icon.png","favicon.ico"):app.router.add_get("/"+n,static(n))
     app.router.add_get("/sw.js",static("sw.js","application/javascript"))
     app.router.add_get("/",static("index.html"));app.router.add_get("/api/state",api_state);app.router.add_get("/api/stream",api_stream)
-    app.router.add_get("/api/backtest",api_backtest);app.router.add_get("/api/evolutions",api_evolutions);app.router.add_get("/api/trades",api_trades);app.router.add_get("/api/equity",api_equity);app.router.add_get("/api/v9",api_v9);app.router.add_get("/api/eq2",api_eq2)
+    app.router.add_get("/api/backtest",api_backtest);app.router.add_get("/api/evolutions",api_evolutions);app.router.add_get("/api/trades",api_trades);app.router.add_get("/api/equity",api_equity);app.router.add_get("/api/v9",api_v9);app.router.add_get("/api/v10",api_v10);app.router.add_get("/api/token",api_token);app.router.add_get("/api/eq2",api_eq2)
     run=web.AppRunner(app);await run.setup();await web.TCPSite(run,"0.0.0.0",int(os.environ.get("PORT","8787"))).start()
     A["RISK"].say("INFO",f"engine v9 up: {len(BOTS)} paper bots, epoch {kv('epoch',0)}",head=True)
     await asyncio.gather(hub(),poller(),CD.bar_loop(HTTP[0]),CD.exit_loop(HTTP[0]),exec_loop(),dev_watch(),risk_clock(),evolution(),watchdog(),sol_price(),flusher(),EXEC.sweeper())
