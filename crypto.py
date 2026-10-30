@@ -125,7 +125,6 @@ class Desk:
         eqs=[r[0] for r in s.db.execute("select crypto from equity2 order by ts")]
         pk=0;mdd=0
         for e in eqs:pk=max(pk,e);mdd=max(mdd,1-e/pk if pk else 0)
-        start=sum(r[0] for r in s.db.execute("select start from c_cfg where born<=(select min(born) from c_cfg)+'' "))  or 1
         ret=(eqs[-1]/eqs[0]-1) if eqs else 0;solr=(s.px.get("SOL",0)/sol0-1) if sol0 else 0
         rows=[dict(k="Trades",v=n,need=f">= {THRESH['trades']}",ok=n>=THRESH["trades"]),dict(k="Win rate",v=f"{w/max(n,1):.0%}",need=">= 35%",ok=n>0 and w/n>=THRESH["wr"]),
               dict(k="Net after fees",v=f"${net:+.2f}",need="> $0",ok=net>0),dict(k="Max drawdown",v=f"{mdd:.1%}",need="<= 15%",ok=mdd<=THRESH["mdd"]),

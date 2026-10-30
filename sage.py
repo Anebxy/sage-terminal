@@ -10,7 +10,7 @@ import strat
 DATA=os.environ.get("DATA_DIR") or D
 try:os.makedirs(DATA,exist_ok=True);open(f"{DATA}/.w","w").close()
 except Exception:DATA=D
-DBF=f"{DATA}/sage.db";CFG=lambda:json.load(open(f"{D}/config.json"))
+DBF=f"{DATA}/sage_v9.db";CFG=lambda:json.load(open(f"{D}/config.json"))
 PW=os.environ.get("DASH_PASSWORD","");START=time.time()
 def now():return dt.datetime.now().isoformat(timespec="milliseconds")
 # ---------------- storage ----------------
@@ -25,6 +25,7 @@ create table if not exists bots(id integer primary key,name text,gen int,parents
 create table if not exists bot_pos(id integer primary key,bot int,mint text,sym text,curve text,opened text,opened_ts real,closed text,entry_mcap real,peak_mcap real,tok real,tok0 real,cost real,proceeds real default 0,tp_done int default 0,status text,reason text,exit_reason text,sol_px real);
 create table if not exists evolutions(id integer primary key,ts text,epoch int,ranking text,removed text,added text);
 create table if not exists kv(k text primary key,v text);
+create table if not exists equity2(ts real,total real,crypto real,meme real,bench real);
 create table if not exists ticks(mint text primary key,sym text,born real,creator text,dev_pct real,social int,series text);""");db.commit()
 for _q in ("alter table bots add column strikes int default 0","alter table bot_pos add column wallets text","alter table bots add column lessons text"):
     try:db.execute(_q);db.commit()
@@ -49,7 +50,7 @@ class Agent:
         push("log",dict(ts=ts,agent=s.name,tag=tag,msg=msg))
         if head:HEAD[:]=[msg,f"{s.name} · {dt.datetime.now().strftime('%H:%M:%S')}"];push("head",HEAD)
     def view(s):return dict(name=s.name,color=s.color,role=s.role,icon=s.icon,line=s.line,total=s.total,last=s.last)
-A={n:Agent(n,c,r) for n,c,r in [("SCOUT","#3399FF","finds every pump.fun launch"),("FILTER","#FF4444","kills rugs & traps"),("ANALYST","#A020F0","scores coins for each bot"),("EXECUTOR","#00FF41","paper fills on the curve"),("RISK","#FF3399","stops, limits, evolution")]}
+A={n:Agent(n,c,r) for n,c,r in [("EXECUTIVE","#C9A35B","allocates capital"),("SCREENER","#5B8CFF","1H/4H trend screen"),("ENTRY PLANNER","#7DD3FC","plans entry/stop/target"),("RISK OFFICER","#F0B35B","sizing & vetoes"),("EXIT CLERK","#A78BFA","stops, targets, trails"),("AUDITOR","#94A3B8","fills, fees, scorecard"),("SCOUT","#3399FF","finds every pump.fun launch"),("FILTER","#FF4444","kills rugs & traps"),("ANALYST","#A020F0","scores coins for each bot"),("EXECUTOR","#00FF41","paper fills on the curve"),("RISK","#FF3399","stops, limits, evolution")]}
 HEAD=["engine starting","SAGE v5"];HOPS=collections.Counter()
 def hop(a,b):HOPS[(a,b)]+=1
 KILLS=collections.Counter(kv("kills",{}) or {})
@@ -365,9 +366,14 @@ def load_bots():
             b.pos[p["mint"]]=dict(id=p["id"],entry_mcap=p["entry_mcap"],peak_mcap=p["peak_mcap"],opened=p["opened_ts"],tp_done=bool(p["tp_done"]),tok=p["tok"],cost=p["cost"],got=p["proceeds"],sym=p["sym"],wallets=json.loads(p["wallets"] or "[]"))
             if p["mint"] not in COINS and p["curve"]:   # resume: re-poll its curve after restart
                 c=strat.Coin(p["mint"],p["sym"],p["opened_ts"]-60,None,0,p["entry_mcap"]);COINS[p["mint"]]=c;CURVE[p["mint"]]=p["curve"];META[p["mint"]]=dict(sym=p["sym"],stage="held",series=[],last_reason=collections.Counter(),deep="ok")
-    if not BOTS:seed()
-    if not kv("v6"):migrate_v6()
-    if not kv("v7"):migrate_v7()
+    if not BOTS:seed_v9()
+def seed_v9():
+    """v9: memecoin desk = ONE strict sniper, the best held-out sniper genome (train n41 +10.9%/trade, held-out n28 +13.5%/trade), 10% of $1,000."""
+    c=CFG();r=json.load(open(f"{D}/bt_result.json"))["bots"]
+    sn=[x for x in r if x["genome"]["style"]=="sniper" and x["holdout"]["n"]>=25 and x["holdout"]["mean"]>0 and x["train"]["mean"]>0]
+    sn.sort(key=lambda x:-x["holdout"]["mean"]);x=sn[0];g=dict(x["genome"]);g.update(style="sniper_strict",max_daily=6,size_pct=0.2,max_early=15,social=1)
+    new_bot(g,0,"v9 seed",c["start_equity"]*c["alloc"]["meme"],f"best held-out sniper: train n={x['train']['n']} {x['train']['mean']:+.1%}/trade, held-out n={x['holdout']['n']} {x['holdout']['mean']:+.1%}/trade; strict rug guard")
+    kvset("desk_start",c["start_equity"]*c["alloc"]["meme"]);kvset("desk_t0",time.time());kvset("epoch",0);kvset("epoch_t0",time.time());kvset("v6",1);kvset("v7",1)
 def seed():
     """Generation 0: train-set winners from the replay backtest (bt_result.json) + live-only styles."""
     c=CFG();desk=c["start_equity"];r=json.load(open(f"{D}/bt_result.json")) if os.path.exists(f"{D}/bt_result.json") else {"bots":[]}
@@ -705,7 +711,7 @@ async def login_post(req):
 async def logout(req):
     r=web.HTTPFound("/login");r.del_cookie("sage");raise r
 async def healthz(req):
-    ts=time.time();ok=ts-WD["loop"]<30 and ts-WD["poll"]<120
+    ts=time.time();ok=ts-WD["loop"]<30 and ts-WD["poll"]<120 and (CD is None or ts-CD.ok<120 or ts-START<180)
     return web.Response(text="ok" if ok else "stalled",status=200 if ok else 503)
 async def api_state(req):return web.json_response(snapshot(),headers={"Cache-Control":"no-store"})
 async def api_backtest(req):
@@ -733,9 +739,42 @@ async def api_stream(req):
     except (ConnectionResetError,asyncio.CancelledError,Exception):pass
     finally:SUBS.discard(q)
     return r
+# ---------------- v9: crypto desk + executive ----------------
+import crypto
+def _say(agent,tag,msg,pnl=None):A[agent].say(tag,msg,pnl=pnl,head=tag in("BUY","SELL","EVOLVE"))
+def _live(agent,line):A[agent].live("·",line)
+CD=None;BENCH={}
+def totals():
+    c=CFG();ce=CD.equity() if CD else 0;me=desk_equity()
+    sol=CD.px.get("SOL") if CD else None
+    if sol and not kv("bench_sol0"):kvset("bench_sol0",sol);kvset("bench_t0",time.time())
+    s0=kv("bench_sol0");bench=c["start_equity"]*sol/s0 if sol and s0 else c["start_equity"]
+    return dict(total=round(ce+me,4),crypto=round(ce,4),meme=round(me,4),bench=round(bench,4),start=c["start_equity"])
+async def exec_loop():
+    c=CFG();A["EXECUTIVE"].say("INFO",f"Allocation: {c['alloc']['crypto']:.0%} crypto desk (3 held-out-positive trend configs), {c['alloc']['meme']:.0%} memecoin strict sniper. Reason: crypto trend configs were positive held-out after fees over ~5 months; memecoin edge is unproven (2h held-out), so it stays small.",head=True)
+    last=0
+    while True:
+        t=totals()
+        if time.time()-last>=15:db.execute("insert into equity2 values(?,?,?,?,?)",(time.time(),t["total"],t["crypto"],t["meme"],t["bench"]));db.commit();last=time.time()
+        A["EXECUTIVE"].live("·",f"total ${t['total']:.2f} · crypto ${t['crypto']:.2f} · meme ${t['meme']:.2f} · hold-SOL ${t['bench']:.2f}")
+        await asyncio.sleep(3)
+def v9view():
+    t=totals();c=CFG()
+    return dict(t=t,alloc=c["alloc"],crypto=CD.view(),score=CD.scorecard(kv("bench_t0"),kv("bench_sol0")),meme=dict(bots=bots_view(),board=board(),stats=stats()),
+        agents=[dict(a.view(),charter=crypto.CHARTERS.get(a.name,a.role)) for a in A.values()],server_now=time.time(),
+        log=[dict(r) for r in db.execute("select ts,agent,tag,msg,pnl from events order by id desc limit 80")])
+async def api_v9(req):return web.json_response(v9view(),headers={"Cache-Control":"no-store"})
+async def api_eq2(req):
+    sec={"1h":3600,"6h":21600,"1d":86400,"1w":604800}.get(req.query.get("tf","1d"),10**10)
+    rows=db.execute("select ts,total,bench,crypto,meme from equity2 where ts>=? order by ts",(time.time()-sec,)).fetchall()
+    step=max(1,len(rows)//400);pts=[list(r) for r in rows[::step]]
+    if rows and pts[-1][0]!=rows[-1][0]:pts.append(list(rows[-1]))
+    return web.json_response(pts,headers={"Cache-Control":"no-store"})
 async def main():
     HTTP[0]=aiohttp.ClientSession(headers={"User-Agent":"Mozilla/5.0 (sage paper terminal)"})
     load_bots()
+    global CD;CD=crypto.Desk(db,_say,_live,D)
+    if not CD.cfgs():CD.seed(CFG()["start_equity"]*CFG()["alloc"]["crypto"])
     # close legacy v4 single-bot positions (no live state for them anymore)
     db.execute("update positions set status='closed',closed=?,exit_reason='v5 migration' where status='open'",(now(),));db.commit()
     app=web.Application(middlewares=[auth])
@@ -744,8 +783,8 @@ async def main():
     for n in ("manifest.json","icon-192.png","icon-512.png","icon-maskable-512.png","icon-1024.png","favicon-32.png","apple-touch-icon.png","favicon.ico"):app.router.add_get("/"+n,static(n))
     app.router.add_get("/sw.js",static("sw.js","application/javascript"))
     app.router.add_get("/",static("index.html"));app.router.add_get("/api/state",api_state);app.router.add_get("/api/stream",api_stream)
-    app.router.add_get("/api/backtest",api_backtest);app.router.add_get("/api/evolutions",api_evolutions);app.router.add_get("/api/trades",api_trades);app.router.add_get("/api/equity",api_equity)
+    app.router.add_get("/api/backtest",api_backtest);app.router.add_get("/api/evolutions",api_evolutions);app.router.add_get("/api/trades",api_trades);app.router.add_get("/api/equity",api_equity);app.router.add_get("/api/v9",api_v9);app.router.add_get("/api/eq2",api_eq2)
     run=web.AppRunner(app);await run.setup();await web.TCPSite(run,"0.0.0.0",int(os.environ.get("PORT","8787"))).start()
-    A["RISK"].say("INFO",f"engine v5 up: {len(BOTS)} paper bots, epoch {kv('epoch',0)}",head=True)
-    await asyncio.gather(hub(),poller(),wallets(),dev_watch(),risk_clock(),evolution(),watchdog(),sol_price(),flusher(),EXEC.sweeper())
+    A["RISK"].say("INFO",f"engine v9 up: {len(BOTS)} paper bots, epoch {kv('epoch',0)}",head=True)
+    await asyncio.gather(hub(),poller(),CD.bar_loop(HTTP[0]),CD.exit_loop(HTTP[0]),exec_loop(),dev_watch(),risk_clock(),evolution(),watchdog(),sol_price(),flusher(),EXEC.sweeper())
 if __name__=="__main__":asyncio.run(main())

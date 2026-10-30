@@ -4,8 +4,8 @@
  "rpc_http": "https://api.mainnet-beta.solana.com",
  "subscription": "$7.25/mo \u00b7 Render always-on",
  "kill_switch": false,
- "profile": "HELD-OUT MOMENTUM + STRICT SNIPER (paper)",
- "start_equity": 946.78,
+ "profile": "v9: MAJOR CRYPTO TREND DESK 90% + STRICT MEME SNIPER 10% (paper)",
+ "start_equity": 1000,
  "max_open_per_bot": 3,
  "bot_floor_pct": 0.5,
  "min_trades_rank": 10,
@@ -19,5 +19,9 @@
  "max_trades_day": 50,
  "max_top10_pct": 35,
  "max_smart_wallets": 20,
- "max_trades_hour": 3
+ "max_trades_hour": 3,
+ "alloc": {
+  "crypto": 0.9,
+  "meme": 0.1
+ }
 }
