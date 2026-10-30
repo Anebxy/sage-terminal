@@ -98,6 +98,8 @@ canvas.cf{position:fixed;inset:0;pointer-events:none;z-index:70}
  <div class="card"><div class="row"><b>Go / no-go</b><span class="rt badge" id="gob">…</span></div><div class="xs mu" style="margin:4px 0 6px">Whole desk, live paper trades since the v10 reset. Thresholds fixed in advance.</div><div id="sct"></div></div>
  <div class="card"><b>Costs paid</b><div class="sm mu" id="costs" style="margin-top:6px"></div></div>
  <div class="card"><b>Memecoin configs · held-out backtest</b><div class="xs mu" style="margin:4px 0 8px">Replay of ~2,100 pump.fun tapes; train 11:57–16:56, held-out 16:56–18:52 ET on Oct 29. Mean return per trade after modeled fees.</div><table id="mbt"></table></div>
+ <div class="card"><b>Nightly retest · recorded launches</b><div class="xs mu" id="rtw" style="margin:4px 0 8px"></div><table id="rtt"></table><div class="xs mu" id="rtn" style="margin-top:8px"></div></div>
+ <div class="card"><b>Exit test (Oct 30)</b><div class="xs mu" style="margin-top:6px">Tested a smaller TP1 partial, a 1.5–2× wider trail and a looser "faded" exit on the 4 live configs, 4,325 tapes (train 3,027 / held-out 1,298). No variant beat the current exits on held-out data, so the current exits stay.</div></div>
  <div class="card"><b>Crypto backup · held-out backtest</b><div class="xs mu" id="cbw" style="margin:4px 0 8px"></div><table id="cbt"></table></div>
 </section>
 <nav><a class="on" data-s="home" onclick="go('home')"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Home</a>
@@ -175,6 +177,9 @@ function render(){const t=S.t,v=S.v10,m=S.meme,c=S.crypto,sc=S.score;
  $('mbt').innerHTML='<tr><th>Bot</th><th>Train</th><th>Held-out</th><th>Win</th></tr>'+m.bots.filter(b=>b.status=='alive').map(b=>{const k=/held-out n=(\d+) ([+-][\d.]+%)\/trade, win (\d+%) \(train n=(\d+) ([+-][\d.]+%)/.exec(b.note||'');return k?`<tr><td>${esc(b.name)} <span class="mu">${b.style}</span></td><td>${k[5]} (n${k[4]})</td><td class="g">${k[2]} (n${k[1]})</td><td>${k[3]}</td></tr>`:''}).join('');
  const bt=c.bt;$('cbw').textContent=`Train ${bt.train[0]}→${bt.train[1]}, held-out ${bt.hold[0]}→${bt.hold[1]}; per $1,000 at 1% risk; hold SOL ${pc(100*bt.solbh.hold)}`;
  $('cbt').innerHTML='<tr><th>Config</th><th>Trades</th><th>Win</th><th>Net</th></tr>'+bt.ranked.filter(x=>x.funded).slice(0,3).map(x=>`<tr><td>${esc(x.name)}</td><td>${x.hold.n}</td><td>${Math.round(100*x.hold.wr)}%</td><td class="${cl(x.hold.net)}">${f$(x.hold.net,0)}</td></tr>`).join('');
+ const rt=S.retest,rc=S.rec;$('rtw').textContent=rt&&rt.status=='ok'?`${rt.coins} coins over ${rt.span_days} days · train ${rt.train[0]}–${rt.train[1]} · held-out ${rt.hold[0]}–${rt.hold[1]} · ran ${rt.ts.replace('T',' ')}`:(rt?rt.status:'first run tonight ~4 AM ET');
+ $('rtt').innerHTML=rt&&rt.rows?'<tr><th>Config</th><th>Train</th><th>Held-out</th><th></th></tr>'+rt.rows.slice(0,8).map(r=>`<tr><td>${r.style} <span class="mu">${esc(r.src)}</span></td><td>${pc(100*r.train.mean)} (n${r.train.n})</td><td class="${cl(r.holdout.mean)}">${pc(100*r.holdout.mean)} (n${r.holdout.n})</td><td>${r.promoted?'<b class="g">promoted</b>':''}</td></tr>`).join(''):'';
+ $('rtn').textContent=`Recorder: ${rc.coins} launches saved, ${rc.files} day files, ${rc.mb} MB on disk (14-day window). Promoted configs join the replacement list only after 2+ days of data; live bots change only through the deletion rules.`;
  if(TOKM)openTok(TOKM,true);
 }
 let EQall=[];async function loadAll(){try{EQall=await j('/api/eq2?tf=all')}catch(e){}}

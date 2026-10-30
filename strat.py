@@ -52,7 +52,7 @@ def rand_genome(style=None,rng=random):
 def mutate(g,rng=random,rate=0.3,scale=0.2):
     g=copy.deepcopy(g)
     for k,(a,b) in RANGES.items():
-        if rng.random()<rate:g[k]=min(b,max(a,g[k]+rng.gauss(0,scale*(b-a))))
+        if k in g and rng.random()<rate:g[k]=min(b,max(a,g[k]+rng.gauss(0,scale*(b-a))))
     g["social"]=round(g["social"])
     if rng.random()<0.05:g["style"]=rng.choice(STYLES[:3])
     return g

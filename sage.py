@@ -252,7 +252,7 @@ async def deep_check(mint):
     m["deep"]="pending";f=A["FILTER"];f.live("⌕",f"RugCheck + dev wallet ${m['sym']}");chk(mint,"dev wallet","…");chk(mint,"RugCheck","…")
     if c.dev_pct>0.05 and c.creator:
         b=await dev_balance(c.creator,mint)
-        if b is not None and b<1e7*c.dev_pct*0.5:c.dev_sold=True;mark_rugger(c)
+        if b is not None and b<1e7*c.dev_pct*0.5:c.dev_sold=True;mark_rugger(c);META.get(c.mint,{}).setdefault("dev_sold_ts",time.time())
     chk(mint,"dev wallet","sold" if c.dev_sold else f"holds · bought {c.dev_pct:.1f}%")
     r=await jget(f"https://api.rugcheck.xyz/v1/tokens/{mint}/report",6);m["rug_ok"]=bool(r)
     sym_=((r or {}).get("tokenMeta") or {}).get("symbol")
@@ -279,7 +279,7 @@ async def dev_watch():
             c=COINS[mint]
             if c.dev_pct>0.05 and not c.dev_sold:
                 b=await dev_balance(c.creator,mint)
-                if b is not None and b<1e7*c.dev_pct*0.5:c.dev_sold=True;mark_rugger(c);A["RISK"].say("WARN",f"${c.sym} dev wallet sold - forcing exits",mint,c.sym,head=True)
+                if b is not None and b<1e7*c.dev_pct*0.5:c.dev_sold=True;mark_rugger(c);META.get(c.mint,{}).setdefault("dev_sold_ts",time.time());A["RISK"].say("WARN",f"${c.sym} dev wallet sold - forcing exits",mint,c.sym,head=True)
 # ---------------- TRACKER (part of SCOUT): top wallets via logsSubscribe ----------------
 TRACKED={};BENCHED=set(kv("benched",[]) or []);WSTREAK=collections.Counter();WSWAP=[False]
 def wallet_result(w,win):
@@ -425,7 +425,11 @@ def ETday():
 def heldout_pool():
     r=json.load(open(f"{D}/bt_result.json"))["bots"]
     p=[x for x in r if x["genome"]["style"] in("sniper","momentum") and x["holdout"]["n"]>=25 and x["holdout"]["mean"]>0 and x["train"]["mean"]>0]
-    p.sort(key=lambda x:-x["holdout"]["mean"]);return p
+    p.sort(key=lambda x:-x["holdout"]["mean"])
+    r=retest_data()
+    if r and r.get("status")=="ok" and r.get("eligible"):
+        p+=[dict(genome={k:v for k,v in x["genome"].items() if k!="src"},train=dict(x["train"],mean=x["train"]["mean"]),holdout=dict(x["holdout"])) for x in r["rows"] if x["promoted"]]
+    return p
 def v10_genome(x):
     g=dict(x["genome"]);g.update(size_pct=0.065,max_daily=8);return g
 def held_note(x):return f"held-out n={x['holdout']['n']} {x['holdout']['mean']:+.1%}/trade, win {x['holdout']['win']:.0%} (train n={x['train']['n']} {x['train']['mean']:+.1%})"
@@ -641,6 +645,37 @@ async def risk_clock():
         if ts-last_kv>=30:kvset("kills",dict(KILLS));kvset("stats",dict(STATS));last_kv=ts;retire_old()
 def desk_equity():return sum(b.equity() for b in BOTS.values())+kv_cache.get("dead_cash",0)
 kv_cache={}
+import gzip
+REC=f"{DATA}/rec";os.makedirs(REC,exist_ok=True)
+def record(mint,c,m):
+    """Recorder: every watched launch's curve history -> /data/rec/YYYY-MM-DD.jsonl.gz (append-only gzip members), pruned after 14 days."""
+    try:
+        r=dict(mint=mint,sym=c.sym,born=c.born,creator=c.creator,dev_pct=c.dev_pct,social=int(bool(c.social_ok)),early_pct=c.early_pct,dev_sold_ts=m.get("dev_sold_ts") or (c.last_ts if c.dev_sold else None),killed=m.get("killed"),series=m["series"])
+        with gzip.open(f"{REC}/{dt.date.today().isoformat()}.jsonl.gz","at",compresslevel=6) as f:f.write(json.dumps(r,separators=(",",":"))+"\n")
+        STATS["rec_coins"]+=1
+    except Exception:STATS["rec_err"]+=1
+def rec_prune():
+    cut=(dt.date.today()-dt.timedelta(days=14)).isoformat()
+    for f in os.listdir(REC):
+        if f.endswith(".jsonl.gz") and f[:10]<cut:os.remove(f"{REC}/{f}")
+def rec_size():
+    fs=[f for f in os.listdir(REC) if f.endswith(".gz")];return dict(files=len(fs),mb=round(sum(os.path.getsize(f"{REC}/{f}") for f in fs)/1e6,2))
+def retest_data():
+    try:return json.load(open(f"{DATA}/retest.json"))
+    except Exception:return None
+async def nightly():
+    """~4 AM ET: re-run train/held-out on everything recorded. Report only until >=2 days recorded; then promoted configs join the replacement list."""
+    from zoneinfo import ZoneInfo
+    while True:
+        await asyncio.sleep(60);n=dt.datetime.now(ZoneInfo("America/New_York"))
+        if n.hour!=4 or kv("retest_day")==n.date().isoformat():continue
+        kvset("retest_day",n.date().isoformat());rec_prune()
+        live=json.dumps([b.g for b in BOTS.values()])
+        p=await asyncio.create_subprocess_exec("nice","-n","15","python3",f"{D}/retest.py",live,cwd=D,stdout=asyncio.subprocess.DEVNULL,stderr=asyncio.subprocess.PIPE)
+        _,err=await p.communicate();r=retest_data()
+        if p.returncode!=0 or not r:A["AUDITOR"].say("RETEST",f"nightly retest failed ({(err or b'').decode()[-120:]})");continue
+        if r.get("status")!="ok":A["AUDITOR"].say("RETEST",f"nightly retest: {r.get('status')}");continue
+        A["AUDITOR"].say("RETEST",f"nightly retest on {r['coins']} recorded coins ({r['span_days']} days): {r['promoted']} config(s) held-out positive with n>=30"+("" if r["eligible"] else " · report only (<2 days of data)"),head=True)
 def retire_old():
     """Drop quiet coins from the poll set; record their tick series for future backtests."""
     ts=time.time();cfg=CFG()
@@ -652,6 +687,7 @@ def retire_old():
                 lr=m["last_reason"].most_common(1);why="never pumped" if c.peak<35 else (f"no bot entry: {lr[0][0]}" if lr else "no bot entry")
                 if any((b,mint) in DONE for b in BOTS):why=None
                 if why:kill(why);STATS["passed"]+=1
+            if len(m.get("series",[]))>3:record(mint,c,m)
             if len(m.get("series",[]))>3:
                 db.execute("insert or replace into ticks values(?,?,?,?,?,?,?)",(mint,c.sym,c.born,c.creator,c.dev_pct,int(bool(c.social_ok)),json.dumps(m["series"])))
             COINS.pop(mint,None);CURVE.pop(mint,None);META.pop(mint,None)
@@ -872,6 +908,7 @@ def v10view():
         b=next((x for x in BOTS.values() if h["mint"] in x.pos),None)
         if b:p=b.pos[h["mint"]];h["stop_mcap"]=round(stopline(b,p),2);h["stack_pct"]=round(100*p["cost"]/max(b.equity(),1e-9),1);h["trail"]=b.g["trail"];h["tp1"]=b.g["tp1"]
     st=day_guard();me=meme_eq()
+    v["retest"]=retest_data();v["rec"]=dict(rec_size(),coins=STATS["rec_coins"],err=STATS["rec_err"])
     v["v10"]=dict(stats=dict(seen=STATS["seen"],killed=STATS["killed"],signals=STATS["signals"],buys=STATS["buys"],closed=STATS["closed"],watching=len(COINS),passed=sum(1 for m in META.values() if m.get("deep")=="ok"),scoring=sum(1 for m in META.values() if m.get("deep")=="pending")),
         kills=KILLS.most_common(8),recent_kills=[dict(sym=m.get("sym"),why=m.get("killed")) for m in list(META.values())[-60:] if m.get("killed")][-6:][::-1],
         day=dict(d=st["d"],start=round(st["eq"],2),now=round(me,2),paused=me<st["eq"]*0.9),
@@ -917,5 +954,5 @@ async def main():
     app.router.add_get("/api/backtest",api_backtest);app.router.add_get("/api/evolutions",api_evolutions);app.router.add_get("/api/trades",api_trades);app.router.add_get("/api/equity",api_equity);app.router.add_get("/api/v9",api_v9);app.router.add_get("/api/v10",api_v10);app.router.add_get("/api/token",api_token);app.router.add_get("/api/eq2",api_eq2)
     run=web.AppRunner(app);await run.setup();await web.TCPSite(run,"0.0.0.0",int(os.environ.get("PORT","8787"))).start()
     A["RISK"].say("INFO",f"engine v9 up: {len(BOTS)} paper bots, epoch {kv('epoch',0)}",head=True)
-    await asyncio.gather(hub(),poller(),curve_ws(),CD.bar_loop(HTTP[0]),CD.exit_loop(HTTP[0]),exec_loop(),dev_watch(),risk_clock(),evolution(),watchdog(),sol_price(),flusher(),EXEC.sweeper())
+    await asyncio.gather(hub(),poller(),curve_ws(),nightly(),CD.bar_loop(HTTP[0]),CD.exit_loop(HTTP[0]),exec_loop(),dev_watch(),risk_clock(),evolution(),watchdog(),sol_price(),flusher(),EXEC.sweeper())
 if __name__=="__main__":asyncio.run(main())
