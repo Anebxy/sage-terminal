@@ -1,0 +1,1318 @@
+{
+ "train": [
+  "2025-05-18",
+  "2026-05-24"
+ ],
+ "hold": [
+  "2026-05-24",
+  "2026-10-30"
+ ],
+ "solbh": {
+  "train": -0.49397377858780656,
+  "hold": 0.09805971883350773
+ },
+ "ranked": [
+  {
+   "name": "Trend-48h\u00b72.5ATR\u00b7trail3\u00b748h",
+   "cfg": {
+    "s": "trend",
+    "n": 48,
+    "k": 2.5,
+    "trail": 3,
+    "hold": 48
+   },
+   "train": {
+    "n": 316,
+    "wr": 0.354,
+    "net": 863.67,
+    "mdd": 0.156,
+    "tpd": 0.85
+   },
+   "hold": {
+    "n": 149,
+    "wr": 0.383,
+    "net": 145.22,
+    "mdd": 0.141,
+    "tpd": 0.94
+   },
+   "score": 5553.254293624392,
+   "funded": true,
+   "why": "train 316 trades net $+864 (DD 16%); held-out 149 trades net $+145, win 38%, DD 14% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Trend-48h\u00b71.5ATR\u00b7trail3\u00b748h",
+   "cfg": {
+    "s": "trend",
+    "n": 48,
+    "k": 1.5,
+    "trail": 3,
+    "hold": 48
+   },
+   "train": {
+    "n": 365,
+    "wr": 0.296,
+    "net": 991.98,
+    "mdd": 0.19,
+    "tpd": 0.99
+   },
+   "hold": {
+    "n": 174,
+    "wr": 0.305,
+    "net": 65.61,
+    "mdd": 0.23,
+    "tpd": 1.1
+   },
+   "score": 5220.362452761165,
+   "funded": true,
+   "why": "train 365 trades net $+992 (DD 19%); held-out 174 trades net $+66, win 30%, DD 23% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Trend-24h\u00b71.5ATR\u00b7trail3\u00b748h",
+   "cfg": {
+    "s": "trend",
+    "n": 24,
+    "k": 1.5,
+    "trail": 3,
+    "hold": 48
+   },
+   "train": {
+    "n": 452,
+    "wr": 0.303,
+    "net": 847.54,
+    "mdd": 0.234,
+    "tpd": 1.22
+   },
+   "hold": {
+    "n": 200,
+    "wr": 0.365,
+    "net": 304.52,
+    "mdd": 0.196,
+    "tpd": 1.26
+   },
+   "score": 3620.96266994262,
+   "funded": true,
+   "why": "train 452 trades net $+848 (DD 23%); held-out 200 trades net $+305, win 36%, DD 20% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Trend-48h\u00b71.5ATR\u00b7trail4\u00b748h",
+   "cfg": {
+    "s": "trend",
+    "n": 48,
+    "k": 1.5,
+    "trail": 4,
+    "hold": 48
+   },
+   "train": {
+    "n": 351,
+    "wr": 0.259,
+    "net": 934.74,
+    "mdd": 0.211,
+    "tpd": 0.95
+   },
+   "hold": {
+    "n": 170,
+    "wr": 0.271,
+    "net": 64.68,
+    "mdd": 0.269,
+    "tpd": 1.07
+   },
+   "score": 4426.964543429737,
+   "funded": true,
+   "why": "train 351 trades net $+935 (DD 21%); held-out 170 trades net $+65, win 27%, DD 27% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Trend-48h\u00b72.5ATR\u00b7trail3\u00b7120h",
+   "cfg": {
+    "s": "trend",
+    "n": 48,
+    "k": 2.5,
+    "trail": 3,
+    "hold": 120
+   },
+   "train": {
+    "n": 280,
+    "wr": 0.357,
+    "net": 667.96,
+    "mdd": 0.176,
+    "tpd": 0.76
+   },
+   "hold": {
+    "n": 130,
+    "wr": 0.362,
+    "net": 151.88,
+    "mdd": 0.132,
+    "tpd": 0.82
+   },
+   "score": 3799.060332180259,
+   "funded": true,
+   "why": "train 280 trades net $+668 (DD 18%); held-out 130 trades net $+152, win 36%, DD 13% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Trend-48h\u00b72.5ATR\u00b7trail4\u00b748h",
+   "cfg": {
+    "s": "trend",
+    "n": 48,
+    "k": 2.5,
+    "trail": 4,
+    "hold": 48
+   },
+   "train": {
+    "n": 300,
+    "wr": 0.357,
+    "net": 667.28,
+    "mdd": 0.186,
+    "tpd": 0.81
+   },
+   "hold": {
+    "n": 145,
+    "wr": 0.372,
+    "net": 71.25,
+    "mdd": 0.208,
+    "tpd": 0.91
+   },
+   "score": 3595.8825822564986,
+   "funded": true,
+   "why": "train 300 trades net $+667 (DD 19%); held-out 145 trades net $+71, win 37%, DD 21% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Trend-24h\u00b71.5ATR\u00b7trail4\u00b748h",
+   "cfg": {
+    "s": "trend",
+    "n": 24,
+    "k": 1.5,
+    "trail": 4,
+    "hold": 48
+   },
+   "train": {
+    "n": 442,
+    "wr": 0.278,
+    "net": 688.49,
+    "mdd": 0.196,
+    "tpd": 1.19
+   },
+   "hold": {
+    "n": 197,
+    "wr": 0.284,
+    "net": 269.48,
+    "mdd": 0.251,
+    "tpd": 1.24
+   },
+   "score": 3508.7266631809157,
+   "funded": true,
+   "why": "train 442 trades net $+688 (DD 20%); held-out 197 trades net $+269, win 28%, DD 25% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Trend-24h\u00b71.5ATR\u00b7trail3\u00b7120h",
+   "cfg": {
+    "s": "trend",
+    "n": 24,
+    "k": 1.5,
+    "trail": 3,
+    "hold": 120
+   },
+   "train": {
+    "n": 406,
+    "wr": 0.3,
+    "net": 869.58,
+    "mdd": 0.253,
+    "tpd": 1.1
+   },
+   "hold": {
+    "n": 183,
+    "wr": 0.333,
+    "net": 244.18,
+    "mdd": 0.185,
+    "tpd": 1.15
+   },
+   "score": 3436.6355192221718,
+   "funded": true,
+   "why": "train 406 trades net $+870 (DD 25%); held-out 183 trades net $+244, win 33%, DD 18% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Trend-48h\u00b71.5ATR\u00b7trail3\u00b7120h",
+   "cfg": {
+    "s": "trend",
+    "n": 48,
+    "k": 1.5,
+    "trail": 3,
+    "hold": 120
+   },
+   "train": {
+    "n": 330,
+    "wr": 0.294,
+    "net": 689.67,
+    "mdd": 0.231,
+    "tpd": 0.89
+   },
+   "hold": {
+    "n": 159,
+    "wr": 0.283,
+    "net": 51.23,
+    "mdd": 0.245,
+    "tpd": 1.0
+   },
+   "score": 2982.9524655816576,
+   "funded": true,
+   "why": "train 330 trades net $+690 (DD 23%); held-out 159 trades net $+51, win 28%, DD 24% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Trend-24h\u00b72.5ATR\u00b7trail3\u00b748h",
+   "cfg": {
+    "s": "trend",
+    "n": 24,
+    "k": 2.5,
+    "trail": 3,
+    "hold": 48
+   },
+   "train": {
+    "n": 399,
+    "wr": 0.371,
+    "net": 699.98,
+    "mdd": 0.238,
+    "tpd": 1.08
+   },
+   "hold": {
+    "n": 174,
+    "wr": 0.425,
+    "net": 330.82,
+    "mdd": 0.132,
+    "tpd": 1.1
+   },
+   "score": 2944.3087098228007,
+   "funded": true,
+   "why": "train 399 trades net $+700 (DD 24%); held-out 174 trades net $+331, win 42%, DD 13% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Trend-24h\u00b72.5ATR\u00b7trail4\u00b748h",
+   "cfg": {
+    "s": "trend",
+    "n": 24,
+    "k": 2.5,
+    "trail": 4,
+    "hold": 48
+   },
+   "train": {
+    "n": 377,
+    "wr": 0.382,
+    "net": 590.17,
+    "mdd": 0.209,
+    "tpd": 1.02
+   },
+   "hold": {
+    "n": 171,
+    "wr": 0.38,
+    "net": 258.29,
+    "mdd": 0.184,
+    "tpd": 1.08
+   },
+   "score": 2820.7853383981624,
+   "funded": true,
+   "why": "train 377 trades net $+590 (DD 21%); held-out 171 trades net $+258, win 38%, DD 18% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Trend-24h\u00b71.5ATR\u00b7trail4\u00b7120h",
+   "cfg": {
+    "s": "trend",
+    "n": 24,
+    "k": 1.5,
+    "trail": 4,
+    "hold": 120
+   },
+   "train": {
+    "n": 363,
+    "wr": 0.264,
+    "net": 691.91,
+    "mdd": 0.247,
+    "tpd": 0.98
+   },
+   "hold": {
+    "n": 172,
+    "wr": 0.238,
+    "net": 125.65,
+    "mdd": 0.21,
+    "tpd": 1.08
+   },
+   "score": 2800.0169688129604,
+   "funded": true,
+   "why": "train 363 trades net $+692 (DD 25%); held-out 172 trades net $+126, win 24%, DD 21% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Trend-48h\u00b72.5ATR\u00b7trail4\u00b7120h",
+   "cfg": {
+    "s": "trend",
+    "n": 48,
+    "k": 2.5,
+    "trail": 4,
+    "hold": 120
+   },
+   "train": {
+    "n": 250,
+    "wr": 0.332,
+    "net": 541.13,
+    "mdd": 0.206,
+    "tpd": 0.67
+   },
+   "hold": {
+    "n": 120,
+    "wr": 0.308,
+    "net": 75.87,
+    "mdd": 0.172,
+    "tpd": 0.76
+   },
+   "score": 2630.452031453394,
+   "funded": true,
+   "why": "train 250 trades net $+541 (DD 21%); held-out 120 trades net $+76, win 31%, DD 17% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Trend-24h\u00b72.5ATR\u00b7trail3\u00b7120h",
+   "cfg": {
+    "s": "trend",
+    "n": 24,
+    "k": 2.5,
+    "trail": 3,
+    "hold": 120
+   },
+   "train": {
+    "n": 352,
+    "wr": 0.366,
+    "net": 680.35,
+    "mdd": 0.282,
+    "tpd": 0.95
+   },
+   "hold": {
+    "n": 156,
+    "wr": 0.365,
+    "net": 264.75,
+    "mdd": 0.142,
+    "tpd": 0.98
+   },
+   "score": 2410.845958954544,
+   "funded": true,
+   "why": "train 352 trades net $+680 (DD 28%); held-out 156 trades net $+265, win 36%, DD 14% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Trend-24h\u00b72.5ATR\u00b7trail4\u00b7120h",
+   "cfg": {
+    "s": "trend",
+    "n": 24,
+    "k": 2.5,
+    "trail": 4,
+    "hold": 120
+   },
+   "train": {
+    "n": 300,
+    "wr": 0.343,
+    "net": 649.24,
+    "mdd": 0.28,
+    "tpd": 0.81
+   },
+   "hold": {
+    "n": 143,
+    "wr": 0.287,
+    "net": 154.67,
+    "mdd": 0.178,
+    "tpd": 0.9
+   },
+   "score": 2314.8746612793984,
+   "funded": true,
+   "why": "train 300 trades net $+649 (DD 28%); held-out 143 trades net $+155, win 29%, DD 18% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Trend-48h\u00b71.5ATR\u00b7trail4\u00b7120h",
+   "cfg": {
+    "s": "trend",
+    "n": 48,
+    "k": 1.5,
+    "trail": 4,
+    "hold": 120
+   },
+   "train": {
+    "n": 304,
+    "wr": 0.234,
+    "net": 454.64,
+    "mdd": 0.268,
+    "tpd": 0.82
+   },
+   "hold": {
+    "n": 146,
+    "wr": 0.247,
+    "net": 57.95,
+    "mdd": 0.223,
+    "tpd": 0.92
+   },
+   "score": 1699.0813269094056,
+   "funded": true,
+   "why": "train 304 trades net $+455 (DD 27%); held-out 146 trades net $+58, win 25%, DD 22% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Trend-48h\u00b71.5ATR\u00b7trail2\u00b748h",
+   "cfg": {
+    "s": "trend",
+    "n": 48,
+    "k": 1.5,
+    "trail": 2,
+    "hold": 48
+   },
+   "train": {
+    "n": 425,
+    "wr": 0.301,
+    "net": 216.27,
+    "mdd": 0.195,
+    "tpd": 1.15
+   },
+   "hold": {
+    "n": 190,
+    "wr": 0.3,
+    "net": 66.8,
+    "mdd": 0.223,
+    "tpd": 1.2
+   },
+   "score": 1108.3352941938492,
+   "funded": true,
+   "why": "train 425 trades net $+216 (DD 20%); held-out 190 trades net $+67, win 30%, DD 22% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Trend-48h\u00b71.5ATR\u00b7trail2\u00b7120h",
+   "cfg": {
+    "s": "trend",
+    "n": 48,
+    "k": 1.5,
+    "trail": 2,
+    "hold": 120
+   },
+   "train": {
+    "n": 420,
+    "wr": 0.295,
+    "net": 214.73,
+    "mdd": 0.195,
+    "tpd": 1.13
+   },
+   "hold": {
+    "n": 186,
+    "wr": 0.296,
+    "net": 29.79,
+    "mdd": 0.235,
+    "tpd": 1.17
+   },
+   "score": 1100.4401777736286,
+   "funded": true,
+   "why": "train 420 trades net $+215 (DD 20%); held-out 186 trades net $+30, win 30%, DD 24% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Trend-24h\u00b71.5ATR\u00b7trail2\u00b7120h",
+   "cfg": {
+    "s": "trend",
+    "n": 24,
+    "k": 1.5,
+    "trail": 2,
+    "hold": 120
+   },
+   "train": {
+    "n": 527,
+    "wr": 0.317,
+    "net": 96.49,
+    "mdd": 0.254,
+    "tpd": 1.42
+   },
+   "hold": {
+    "n": 226,
+    "wr": 0.332,
+    "net": 158.9,
+    "mdd": 0.209,
+    "tpd": 1.42
+   },
+   "score": 379.8295440741498,
+   "funded": true,
+   "why": "train 527 trades net $+96 (DD 25%); held-out 226 trades net $+159, win 33%, DD 21% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Trend-48h\u00b72.5ATR\u00b7trail2\u00b7120h",
+   "cfg": {
+    "s": "trend",
+    "n": 48,
+    "k": 2.5,
+    "trail": 2,
+    "hold": 120
+   },
+   "train": {
+    "n": 392,
+    "wr": 0.334,
+    "net": 64.69,
+    "mdd": 0.203,
+    "tpd": 1.06
+   },
+   "hold": {
+    "n": 170,
+    "wr": 0.329,
+    "net": 141.55,
+    "mdd": 0.162,
+    "tpd": 1.07
+   },
+   "score": 319.3309187890852,
+   "funded": true,
+   "why": "train 392 trades net $+65 (DD 20%); held-out 170 trades net $+142, win 33%, DD 16% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Trend-24h\u00b71.5ATR\u00b7trail2\u00b748h",
+   "cfg": {
+    "s": "trend",
+    "n": 24,
+    "k": 1.5,
+    "trail": 2,
+    "hold": 48
+   },
+   "train": {
+    "n": 538,
+    "wr": 0.318,
+    "net": 61.24,
+    "mdd": 0.253,
+    "tpd": 1.45
+   },
+   "hold": {
+    "n": 230,
+    "wr": 0.339,
+    "net": 220.32,
+    "mdd": 0.209,
+    "tpd": 1.45
+   },
+   "score": 242.02052036712684,
+   "funded": true,
+   "why": "train 538 trades net $+61 (DD 25%); held-out 230 trades net $+220, win 34%, DD 21% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Trend-48h\u00b72.5ATR\u00b7trail2\u00b748h",
+   "cfg": {
+    "s": "trend",
+    "n": 48,
+    "k": 2.5,
+    "trail": 2,
+    "hold": 48
+   },
+   "train": {
+    "n": 398,
+    "wr": 0.342,
+    "net": 46.69,
+    "mdd": 0.203,
+    "tpd": 1.07
+   },
+   "hold": {
+    "n": 175,
+    "wr": 0.337,
+    "net": 172.83,
+    "mdd": 0.154,
+    "tpd": 1.1
+   },
+   "score": 230.44463457087528,
+   "funded": true,
+   "why": "train 398 trades net $+47 (DD 20%); held-out 175 trades net $+173, win 34%, DD 15% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Trend-24h\u00b72.5ATR\u00b7trail2\u00b7120h",
+   "cfg": {
+    "s": "trend",
+    "n": 24,
+    "k": 2.5,
+    "trail": 2,
+    "hold": 120
+   },
+   "train": {
+    "n": 490,
+    "wr": 0.351,
+    "net": 19.15,
+    "mdd": 0.26,
+    "tpd": 1.32
+   },
+   "hold": {
+    "n": 206,
+    "wr": 0.374,
+    "net": 300.54,
+    "mdd": 0.127,
+    "tpd": 1.3
+   },
+   "score": 73.63098675040361,
+   "funded": true,
+   "why": "train 490 trades net $+19 (DD 26%); held-out 206 trades net $+301, win 37%, DD 13% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Trend-24h\u00b72.5ATR\u00b7trail2\u00b748h",
+   "cfg": {
+    "s": "trend",
+    "n": 24,
+    "k": 2.5,
+    "trail": 2,
+    "hold": 48
+   },
+   "train": {
+    "n": 498,
+    "wr": 0.357,
+    "net": 9.82,
+    "mdd": 0.258,
+    "tpd": 1.34
+   },
+   "hold": {
+    "n": 212,
+    "wr": 0.382,
+    "net": 351.96,
+    "mdd": 0.127,
+    "tpd": 1.34
+   },
+   "score": 38.12642299415961,
+   "funded": true,
+   "why": "train 498 trades net $+10 (DD 26%); held-out 212 trades net $+352, win 38%, DD 13% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Bounce-RSI30\u00b72.5ATR\u00b72.5R\u00b772h",
+   "cfg": {
+    "s": "pull",
+    "rsi": 30,
+    "k": 2.5,
+    "tp": 2.5,
+    "hold": 72
+   },
+   "train": {
+    "n": 160,
+    "wr": 0.338,
+    "net": -152.67,
+    "mdd": 0.25,
+    "tpd": 0.43
+   },
+   "hold": {
+    "n": 71,
+    "wr": 0.394,
+    "net": 4.74,
+    "mdd": 0.071,
+    "tpd": 0.45
+   },
+   "score": -610.5872954784029,
+   "funded": false,
+   "why": "train 160 trades net $-153 (DD 25%); held-out 71 trades net $+5, win 39%, DD 7% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Bounce-RSI30\u00b72.5ATR\u00b71.5R\u00b772h",
+   "cfg": {
+    "s": "pull",
+    "rsi": 30,
+    "k": 2.5,
+    "tp": 1.5,
+    "hold": 72
+   },
+   "train": {
+    "n": 166,
+    "wr": 0.404,
+    "net": -144.07,
+    "mdd": 0.207,
+    "tpd": 0.45
+   },
+   "hold": {
+    "n": 78,
+    "wr": 0.474,
+    "net": 33.71,
+    "mdd": 0.062,
+    "tpd": 0.49
+   },
+   "score": -695.6859958063238,
+   "funded": false,
+   "why": "train 166 trades net $-144 (DD 21%); held-out 78 trades net $+34, win 47%, DD 6% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Bounce-RSI35\u00b72.5ATR\u00b72.5R\u00b772h",
+   "cfg": {
+    "s": "pull",
+    "rsi": 35,
+    "k": 2.5,
+    "tp": 2.5,
+    "hold": 72
+   },
+   "train": {
+    "n": 271,
+    "wr": 0.328,
+    "net": -330.94,
+    "mdd": 0.438,
+    "tpd": 0.73
+   },
+   "hold": {
+    "n": 116,
+    "wr": 0.302,
+    "net": -230.99,
+    "mdd": 0.234,
+    "tpd": 0.73
+   },
+   "score": -756.3048195606253,
+   "funded": false,
+   "why": "train 271 trades net $-331 (DD 44%); held-out 116 trades net $-231, win 30%, DD 23% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Bounce-RSI30\u00b71.5ATR\u00b72.5R\u00b772h",
+   "cfg": {
+    "s": "pull",
+    "rsi": 30,
+    "k": 1.5,
+    "tp": 2.5,
+    "hold": 72
+   },
+   "train": {
+    "n": 178,
+    "wr": 0.275,
+    "net": -188.61,
+    "mdd": 0.247,
+    "tpd": 0.48
+   },
+   "hold": {
+    "n": 84,
+    "wr": 0.381,
+    "net": 3.83,
+    "mdd": 0.07,
+    "tpd": 0.53
+   },
+   "score": -763.9684157755507,
+   "funded": false,
+   "why": "train 178 trades net $-189 (DD 25%); held-out 84 trades net $+4, win 38%, DD 7% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Bounce-RSI35\u00b72.5ATR\u00b71.5R\u00b772h",
+   "cfg": {
+    "s": "pull",
+    "rsi": 35,
+    "k": 2.5,
+    "tp": 1.5,
+    "hold": 72
+   },
+   "train": {
+    "n": 296,
+    "wr": 0.389,
+    "net": -355.74,
+    "mdd": 0.439,
+    "tpd": 0.8
+   },
+   "hold": {
+    "n": 132,
+    "wr": 0.371,
+    "net": -155.85,
+    "mdd": 0.159,
+    "tpd": 0.83
+   },
+   "score": -809.4674360113154,
+   "funded": false,
+   "why": "train 296 trades net $-356 (DD 44%); held-out 132 trades net $-156, win 37%, DD 16% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Bounce-RSI25\u00b72.5ATR\u00b72.5R\u00b724h",
+   "cfg": {
+    "s": "pull",
+    "rsi": 25,
+    "k": 2.5,
+    "tp": 2.5,
+    "hold": 24
+   },
+   "train": {
+    "n": 67,
+    "wr": 0.358,
+    "net": -112.25,
+    "mdd": 0.135,
+    "tpd": 0.18
+   },
+   "hold": {
+    "n": 38,
+    "wr": 0.632,
+    "net": 83.82,
+    "mdd": 0.033,
+    "tpd": 0.24
+   },
+   "score": -828.8505527637153,
+   "funded": false,
+   "why": "train 67 trades net $-112 (DD 14%); held-out 38 trades net $+84, win 63%, DD 3% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Bounce-RSI25\u00b72.5ATR\u00b71.5R\u00b724h",
+   "cfg": {
+    "s": "pull",
+    "rsi": 25,
+    "k": 2.5,
+    "tp": 1.5,
+    "hold": 24
+   },
+   "train": {
+    "n": 67,
+    "wr": 0.358,
+    "net": -124.47,
+    "mdd": 0.149,
+    "tpd": 0.18
+   },
+   "hold": {
+    "n": 38,
+    "wr": 0.632,
+    "net": 68.49,
+    "mdd": 0.033,
+    "tpd": 0.24
+   },
+   "score": -835.0117391486085,
+   "funded": false,
+   "why": "train 67 trades net $-124 (DD 15%); held-out 38 trades net $+68, win 63%, DD 3% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Bounce-RSI25\u00b72.5ATR\u00b71.5R\u00b772h",
+   "cfg": {
+    "s": "pull",
+    "rsi": 25,
+    "k": 2.5,
+    "tp": 1.5,
+    "hold": 72
+   },
+   "train": {
+    "n": 67,
+    "wr": 0.373,
+    "net": -139.54,
+    "mdd": 0.166,
+    "tpd": 0.18
+   },
+   "hold": {
+    "n": 37,
+    "wr": 0.568,
+    "net": 75.4,
+    "mdd": 0.038,
+    "tpd": 0.23
+   },
+   "score": -840.070407771091,
+   "funded": false,
+   "why": "train 67 trades net $-140 (DD 17%); held-out 37 trades net $+75, win 57%, DD 4% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Bounce-RSI30\u00b72.5ATR\u00b71.5R\u00b724h",
+   "cfg": {
+    "s": "pull",
+    "rsi": 30,
+    "k": 2.5,
+    "tp": 1.5,
+    "hold": 24
+   },
+   "train": {
+    "n": 169,
+    "wr": 0.402,
+    "net": -183.6,
+    "mdd": 0.214,
+    "tpd": 0.46
+   },
+   "hold": {
+    "n": 80,
+    "wr": 0.475,
+    "net": -22.73,
+    "mdd": 0.067,
+    "tpd": 0.5
+   },
+   "score": -855.942137496968,
+   "funded": false,
+   "why": "train 169 trades net $-184 (DD 21%); held-out 80 trades net $-23, win 48%, DD 7% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Bounce-RSI30\u00b72.5ATR\u00b72.5R\u00b724h",
+   "cfg": {
+    "s": "pull",
+    "rsi": 30,
+    "k": 2.5,
+    "tp": 2.5,
+    "hold": 24
+   },
+   "train": {
+    "n": 168,
+    "wr": 0.381,
+    "net": -188.8,
+    "mdd": 0.22,
+    "tpd": 0.45
+   },
+   "hold": {
+    "n": 80,
+    "wr": 0.475,
+    "net": -33.37,
+    "mdd": 0.067,
+    "tpd": 0.5
+   },
+   "score": -858.7264084811214,
+   "funded": false,
+   "why": "train 168 trades net $-189 (DD 22%); held-out 80 trades net $-33, win 48%, DD 7% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Bounce-RSI35\u00b72.5ATR\u00b72.5R\u00b724h",
+   "cfg": {
+    "s": "pull",
+    "rsi": 35,
+    "k": 2.5,
+    "tp": 2.5,
+    "hold": 24
+   },
+   "train": {
+    "n": 316,
+    "wr": 0.358,
+    "net": -442.57,
+    "mdd": 0.507,
+    "tpd": 0.85
+   },
+   "hold": {
+    "n": 142,
+    "wr": 0.366,
+    "net": -282.21,
+    "mdd": 0.285,
+    "tpd": 0.89
+   },
+   "score": -873.5016610137742,
+   "funded": false,
+   "why": "train 316 trades net $-443 (DD 51%); held-out 142 trades net $-282, win 37%, DD 28% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Bounce-RSI35\u00b72.5ATR\u00b71.5R\u00b724h",
+   "cfg": {
+    "s": "pull",
+    "rsi": 35,
+    "k": 2.5,
+    "tp": 1.5,
+    "hold": 24
+   },
+   "train": {
+    "n": 320,
+    "wr": 0.384,
+    "net": -424.17,
+    "mdd": 0.482,
+    "tpd": 0.86
+   },
+   "hold": {
+    "n": 142,
+    "wr": 0.394,
+    "net": -219.6,
+    "mdd": 0.222,
+    "tpd": 0.89
+   },
+   "score": -879.4213540222795,
+   "funded": false,
+   "why": "train 320 trades net $-424 (DD 48%); held-out 142 trades net $-220, win 39%, DD 22% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Bounce-RSI25\u00b72.5ATR\u00b72.5R\u00b772h",
+   "cfg": {
+    "s": "pull",
+    "rsi": 25,
+    "k": 2.5,
+    "tp": 2.5,
+    "hold": 72
+   },
+   "train": {
+    "n": 65,
+    "wr": 0.354,
+    "net": -120.92,
+    "mdd": 0.136,
+    "tpd": 0.18
+   },
+   "hold": {
+    "n": 36,
+    "wr": 0.528,
+    "net": 119.94,
+    "mdd": 0.046,
+    "tpd": 0.23
+   },
+   "score": -890.9827075683487,
+   "funded": false,
+   "why": "train 65 trades net $-121 (DD 14%); held-out 36 trades net $+120, win 53%, DD 5% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Bounce-RSI35\u00b71.5ATR\u00b72.5R\u00b772h",
+   "cfg": {
+    "s": "pull",
+    "rsi": 35,
+    "k": 1.5,
+    "tp": 2.5,
+    "hold": 72
+   },
+   "train": {
+    "n": 360,
+    "wr": 0.247,
+    "net": -492.04,
+    "mdd": 0.533,
+    "tpd": 0.97
+   },
+   "hold": {
+    "n": 155,
+    "wr": 0.31,
+    "net": -107.57,
+    "mdd": 0.124,
+    "tpd": 0.98
+   },
+   "score": -923.1916164165752,
+   "funded": false,
+   "why": "train 360 trades net $-492 (DD 53%); held-out 155 trades net $-108, win 31%, DD 12% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Bounce-RSI25\u00b71.5ATR\u00b71.5R\u00b724h",
+   "cfg": {
+    "s": "pull",
+    "rsi": 25,
+    "k": 1.5,
+    "tp": 1.5,
+    "hold": 24
+   },
+   "train": {
+    "n": 69,
+    "wr": 0.362,
+    "net": -94.51,
+    "mdd": 0.102,
+    "tpd": 0.19
+   },
+   "hold": {
+    "n": 38,
+    "wr": 0.579,
+    "net": 51.71,
+    "mdd": 0.032,
+    "tpd": 0.24
+   },
+   "score": -924.6065027062064,
+   "funded": false,
+   "why": "train 69 trades net $-95 (DD 10%); held-out 38 trades net $+52, win 58%, DD 3% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Bounce-RSI30\u00b71.5ATR\u00b71.5R\u00b772h",
+   "cfg": {
+    "s": "pull",
+    "rsi": 30,
+    "k": 1.5,
+    "tp": 1.5,
+    "hold": 72
+   },
+   "train": {
+    "n": 180,
+    "wr": 0.361,
+    "net": -228.26,
+    "mdd": 0.245,
+    "tpd": 0.49
+   },
+   "hold": {
+    "n": 86,
+    "wr": 0.5,
+    "net": 22.26,
+    "mdd": 0.067,
+    "tpd": 0.54
+   },
+   "score": -933.4840704243303,
+   "funded": false,
+   "why": "train 180 trades net $-228 (DD 24%); held-out 86 trades net $+22, win 50%, DD 7% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Bounce-RSI35\u00b71.5ATR\u00b72.5R\u00b724h",
+   "cfg": {
+    "s": "pull",
+    "rsi": 35,
+    "k": 1.5,
+    "tp": 2.5,
+    "hold": 24
+   },
+   "train": {
+    "n": 367,
+    "wr": 0.289,
+    "net": -504.57,
+    "mdd": 0.54,
+    "tpd": 0.99
+   },
+   "hold": {
+    "n": 161,
+    "wr": 0.354,
+    "net": -180.95,
+    "mdd": 0.181,
+    "tpd": 1.01
+   },
+   "score": -934.5522398922003,
+   "funded": false,
+   "why": "train 367 trades net $-505 (DD 54%); held-out 161 trades net $-181, win 35%, DD 18% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Bounce-RSI25\u00b71.5ATR\u00b72.5R\u00b772h",
+   "cfg": {
+    "s": "pull",
+    "rsi": 25,
+    "k": 1.5,
+    "tp": 2.5,
+    "hold": 72
+   },
+   "train": {
+    "n": 69,
+    "wr": 0.246,
+    "net": -157.0,
+    "mdd": 0.164,
+    "tpd": 0.19
+   },
+   "hold": {
+    "n": 38,
+    "wr": 0.447,
+    "net": 56.88,
+    "mdd": 0.042,
+    "tpd": 0.24
+   },
+   "score": -957.3653125004594,
+   "funded": false,
+   "why": "train 69 trades net $-157 (DD 16%); held-out 38 trades net $+57, win 45%, DD 4% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Bounce-RSI35\u00b71.5ATR\u00b71.5R\u00b772h",
+   "cfg": {
+    "s": "pull",
+    "rsi": 35,
+    "k": 1.5,
+    "tp": 1.5,
+    "hold": 72
+   },
+   "train": {
+    "n": 367,
+    "wr": 0.335,
+    "net": -494.29,
+    "mdd": 0.516,
+    "tpd": 0.99
+   },
+   "hold": {
+    "n": 159,
+    "wr": 0.403,
+    "net": -140.09,
+    "mdd": 0.141,
+    "tpd": 1.0
+   },
+   "score": -957.4602127283821,
+   "funded": false,
+   "why": "train 367 trades net $-494 (DD 52%); held-out 159 trades net $-140, win 40%, DD 14% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Bounce-RSI35\u00b71.5ATR\u00b71.5R\u00b724h",
+   "cfg": {
+    "s": "pull",
+    "rsi": 35,
+    "k": 1.5,
+    "tp": 1.5,
+    "hold": 24
+   },
+   "train": {
+    "n": 369,
+    "wr": 0.339,
+    "net": -499.64,
+    "mdd": 0.521,
+    "tpd": 1.0
+   },
+   "hold": {
+    "n": 163,
+    "wr": 0.399,
+    "net": -165.66,
+    "mdd": 0.166,
+    "tpd": 1.03
+   },
+   "score": -958.3228342270526,
+   "funded": false,
+   "why": "train 369 trades net $-500 (DD 52%); held-out 163 trades net $-166, win 40%, DD 17% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Bounce-RSI25\u00b71.5ATR\u00b71.5R\u00b772h",
+   "cfg": {
+    "s": "pull",
+    "rsi": 25,
+    "k": 1.5,
+    "tp": 1.5,
+    "hold": 72
+   },
+   "train": {
+    "n": 69,
+    "wr": 0.333,
+    "net": -119.89,
+    "mdd": 0.125,
+    "tpd": 0.19
+   },
+   "hold": {
+    "n": 38,
+    "wr": 0.605,
+    "net": 78.64,
+    "mdd": 0.032,
+    "tpd": 0.24
+   },
+   "score": -962.4209186312765,
+   "funded": false,
+   "why": "train 69 trades net $-120 (DD 12%); held-out 38 trades net $+79, win 60%, DD 3% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Bounce-RSI25\u00b71.5ATR\u00b72.5R\u00b724h",
+   "cfg": {
+    "s": "pull",
+    "rsi": 25,
+    "k": 1.5,
+    "tp": 2.5,
+    "hold": 24
+   },
+   "train": {
+    "n": 69,
+    "wr": 0.304,
+    "net": -123.31,
+    "mdd": 0.128,
+    "tpd": 0.19
+   },
+   "hold": {
+    "n": 38,
+    "wr": 0.5,
+    "net": 54.8,
+    "mdd": 0.034,
+    "tpd": 0.24
+   },
+   "score": -962.7190859688397,
+   "funded": false,
+   "why": "train 69 trades net $-123 (DD 13%); held-out 38 trades net $+55, win 50%, DD 3% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Bounce-RSI30\u00b71.5ATR\u00b71.5R\u00b724h",
+   "cfg": {
+    "s": "pull",
+    "rsi": 30,
+    "k": 1.5,
+    "tp": 1.5,
+    "hold": 24
+   },
+   "train": {
+    "n": 180,
+    "wr": 0.372,
+    "net": -234.66,
+    "mdd": 0.241,
+    "tpd": 0.49
+   },
+   "hold": {
+    "n": 86,
+    "wr": 0.465,
+    "net": -16.59,
+    "mdd": 0.073,
+    "tpd": 0.54
+   },
+   "score": -971.9199332471906,
+   "funded": false,
+   "why": "train 180 trades net $-235 (DD 24%); held-out 86 trades net $-17, win 46%, DD 7% per $1,000 at 1% risk"
+  },
+  {
+   "name": "Bounce-RSI30\u00b71.5ATR\u00b72.5R\u00b724h",
+   "cfg": {
+    "s": "pull",
+    "rsi": 30,
+    "k": 1.5,
+    "tp": 2.5,
+    "hold": 24
+   },
+   "train": {
+    "n": 180,
+    "wr": 0.306,
+    "net": -265.19,
+    "mdd": 0.272,
+    "tpd": 0.49
+   },
+   "hold": {
+    "n": 85,
+    "wr": 0.4,
+    "net": -43.28,
+    "mdd": 0.067,
+    "tpd": 0.54
+   },
+   "score": -976.0426855796001,
+   "funded": false,
+   "why": "train 180 trades net $-265 (DD 27%); held-out 85 trades net $-43, win 40%, DD 7% per $1,000 at 1% risk"
+  }
+ ],
+ "max_funded": 3,
+ "risk": 0.01,
+ "fee": 0.001,
+ "slip": 0.0005,
+ "diverse3_hold_net_per_1000": 171.79,
+ "plain_top3_hold_net_per_1000": 91.84
+}
