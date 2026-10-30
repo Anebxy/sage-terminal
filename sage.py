@@ -694,7 +694,7 @@ def bots_view():
     out=[]
     for b in BOTS.values():
         cl=b.closed();w=sum(1 for r in cl if r["proceeds"]>r["cost"]);s,n=score(b)
-        out.append(dict(id=b.id,name=b.name,gen=b.gen,style=b.style,parents=b.parents,equity=round(b.equity(),2),start=round(b.start,2),pnl=round(b.equity()-b.start,2),trades=len(cl),wins=w,open=len(b.pos),strikes=b.strikes,dd=round(100*(1-b.equity()/max(b.start,1e-9)),1),score=None if s is None else round(s,2),status="alive",contracts=contracts(b.id),lessons=b.lessons,today=b.day.get(dt.date.today().isoformat(),0),max_daily=round(b.g.get("max_daily",4)),size_pct=round(100*b.g["size_pct"]),
+        out.append(dict(id=b.id,name=b.name,gen=b.gen,style=b.style,parents=b.parents,equity=round(b.equity(),2),start=round(b.start,2),pnl=round(b.equity()-b.start,2),trades=len(cl),wins=w,open=len(b.pos),strikes=b.strikes,dd=round(100*(1-b.equity()/max(b.start,1e-9)),1),score=None if s is None else round(s,2),status="alive",contracts=contracts(b.id),lessons=b.lessons,note=(db.execute("select note from bots where id=?",(b.id,)).fetchone() or [""])[0],today=b.day.get(dt.date.today().isoformat(),0),max_daily=round(b.g.get("max_daily",4)),size_pct=round(100*b.g["size_pct"]),
             g={k:(round(v,3) if isinstance(v,float) else v) for k,v in b.g.items() if k in("consensus","min_wret","max_lag_s","max_mcap","stop","trail","tp1","follow_sells")}))
     out.sort(key=lambda x:-x["pnl"])
     for r in db.execute("select id,name,gen,style,parents,died,note from bots where status='replaced' order by id desc limit 8"):out.append(dict(name=r["name"],gen=r["gen"],style=r["style"],parents=r["parents"],status="replaced",died=r["died"],why=(r["note"] or "")[:120],contracts=contracts(r["id"],4)))
@@ -808,7 +808,7 @@ def v9view():
     t=totals();c=CFG()
     return dict(t=t,alloc=c["alloc"],crypto=CD.view(),score=CD.scorecard(kv("bench_t0"),kv("bench_sol0")),meme=dict(bots=bots_view(),board=board(),stats=stats()),
         agents=[dict(a.view(),charter=crypto.CHARTERS.get(a.name,a.role)) for a in A.values()],server_now=time.time(),
-        log=[dict(r) for r in db.execute("select ts,agent,tag,msg,pnl from events order by id desc limit 80")])
+        log=[dict(r) for r in db.execute("select id,ts,agent,tag,msg,pnl,mint,sym from events order by id desc limit 80")])
 def stopline(b,p):
     st=p["entry_mcap"]*(1+b.g["stop"])
     if p["tp_done"]:st=max(st,p["peak_mcap"]*(1-b.g["trail"]))
