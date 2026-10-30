@@ -500,7 +500,8 @@ def migrate_v7():
 def ANALYST(mint,ts):
     c=COINS.get(mint);m=META.get(mint)
     if not c or m.get("killed") or m.get("deep")=="kill":return
-    an=A["ANALYST"]
+    an=A["ANALYST"];cands=[]
+    if mint in CLAIM or any(mint in x.pos or EXEC.pending_for(x.id,mint) for x in BOTS.values()):return   # one bot per coin at a time
     for b in BOTS.values():
         if mint in b.pos or EXEC.pending_for(b.id,mint) or (b.id,mint) in DONE:continue
         why=strat.wants_entry(b.g,c,ts)
@@ -508,15 +509,25 @@ def ANALYST(mint,ts):
             m["last_reason"][why]+=1;STATS["evals"]+=1
             if why not in("too early","too old") and random.random()<0.25:an.live("✕",f"${c.sym} {why} · {b.name}")
             continue
+        cands.append(b)
+    if cands:
+        b=max(cands,key=lambda x:(x.equity()/max(x.start,1e-9),random.random()))   # best record gets the coin; others skip it
         STATS["signals"]+=1;an.total=STATS["signals"];hop("ANALYST","EXECUTOR")
-        an.live("◆",f"{b.name} wants ${c.sym} · {b.style} · {c.mcap:.0f} SOL mc · {c.up}↑/{c.down}↓");chk(mint,"analyst",f"{b.name} ({b.style}) signal")
-        asyncio.create_task(approve(b,mint))
+        if len(cands)>1:STATS["pilein_blocked"]+=len(cands)-1
+        an.live("◆",f"{b.name} wants ${c.sym} · {b.style} · {c.mcap:.0f} SOL mc"+(f" · beat {len(cands)-1} other bot(s) on record" if len(cands)>1 else ""));chk(mint,"analyst",f"{b.name} ({b.style}) signal")
+        CLAIM[mint]=b.id;asyncio.create_task(approve(b,mint))
     e=CHECK.get(mint)
     if e and e["verdict"] in("checking",) or (e and e["verdict"].startswith("no entry")):
         lr=m["last_reason"].most_common(1)
         if lr:e["verdict"]="no entry: "+lr[0][0]
 DONE=set()   # (bot,mint) one round-trip per bot per coin
+CLAIM={}     # mint -> bot id currently approving/holding (one bot per coin)
 async def approve(b,mint):
+    try:await _approve(b,mint)
+    finally:
+        await asyncio.sleep(2)   # let the order fill register before releasing the claim
+        if CLAIM.get(mint)==b.id:CLAIM.pop(mint,None)
+async def _approve(b,mint):
     c=COINS.get(mint);m=META[mint]
     if m.get("deep") in (None,"pending"):
         if m.get("deep") is None:r=await deep_check(mint)
@@ -902,13 +913,26 @@ def stopline(b,p):
     st=p["entry_mcap"]*(1+b.g["stop"])
     if p["tp_done"]:st=max(st,p["peak_mcap"]*(1-b.g["trail"]))
     return st
+def audit():
+    """Whole-desk auditor (meme + crypto) since the v10 start: closed trades from both ledgers, drawdown and SOL benchmark from the equity series."""
+    c=CFG();st=c["start_equity"]
+    m=[r["proceeds"]-r["cost"] for r in db.execute("select proceeds,cost from bot_pos where status='closed' and cost>0")]
+    k=[r[0] for r in db.execute("select proceeds-cost from c_pos where status='closed'")]
+    allp=m+k;n=len(allp);w=sum(1 for x in allp if x>0);net=sum(allp)
+    pk=0;mdd=0
+    for (e,) in db.execute("select total from equity2 order by ts"):pk=max(pk,e);mdd=max(mdd,1-e/pk if pk else 0)
+    t=totals();ret=t["total"]/st-1;bret=t["bench"]/st-1
+    rows=[dict(k="Trades",v=str(n),need=">= 40",ok=n>=40),dict(k="Win rate",v=f"{w/max(n,1):.0%}",need=">= 35%",ok=n>0 and w/n>=0.35),
+          dict(k="Net after fees (closed)",v=f"{'−' if net<0 else '+'}${abs(net):.2f}",need="> $0",ok=net>0),dict(k="Max drawdown",v=f"{mdd:.1%}",need="<= 15%",ok=mdd<=0.15),
+          dict(k="vs hold SOL",v=f"{ret:+.1%} vs {bret:+.1%}",need="beat it",ok=ret>bret)]
+    return dict(rows=rows,go=all(r["ok"] for r in rows),n=n,wins=w,net=round(net,2),meme_n=len(m),crypto_n=len(k),meme_net=round(sum(m),2),crypto_net=round(sum(k),2),mdd=round(mdd,4),ret=round(ret,4),bench=round(bret,4),pilein_blocked=STATS["pilein_blocked"])
 def v10view():
     v=v9view();ts=time.time()
     for h in v["meme"]["board"]["holding"]:
         b=next((x for x in BOTS.values() if h["mint"] in x.pos),None)
         if b:p=b.pos[h["mint"]];h["stop_mcap"]=round(stopline(b,p),2);h["stack_pct"]=round(100*p["cost"]/max(b.equity(),1e-9),1);h["trail"]=b.g["trail"];h["tp1"]=b.g["tp1"]
     st=day_guard();me=meme_eq()
-    v["retest"]=retest_data();v["rec"]=dict(rec_size(),coins=STATS["rec_coins"],err=STATS["rec_err"])
+    v["audit"]=audit();v["retest"]=retest_data();v["rec"]=dict(rec_size(),coins=STATS["rec_coins"],err=STATS["rec_err"])
     v["v10"]=dict(stats=dict(seen=STATS["seen"],killed=STATS["killed"],signals=STATS["signals"],buys=STATS["buys"],closed=STATS["closed"],watching=len(COINS),passed=sum(1 for m in META.values() if m.get("deep")=="ok"),scoring=sum(1 for m in META.values() if m.get("deep")=="pending")),
         kills=KILLS.most_common(8),recent_kills=[dict(sym=m.get("sym"),why=m.get("killed")) for m in list(META.values())[-60:] if m.get("killed")][-6:][::-1],
         day=dict(d=st["d"],start=round(st["eq"],2),now=round(me,2),paused=me<st["eq"]*0.9),
