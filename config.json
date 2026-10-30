@@ -18,6 +18,6 @@
  ],
  "max_trades_day": 50,
  "max_top10_pct": 35,
- "max_smart_wallets": 60,
+ "max_smart_wallets": 20,
  "max_trades_hour": 3
 }

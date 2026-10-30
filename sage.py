@@ -69,9 +69,19 @@ async def jget(url,timeout=8):
             return await r.json(content_type=None)
     except Exception:return None
 RPCI=[0];RPCBAD=collections.Counter()
-async def rpc(method,params,timeout=8):
-    """Free keyless RPC pool with failover (PublicNode first, Solana public RPC second)."""
-    pool=CFG()["rpc_http_pool"]
+async def rpc(method,params,timeout=8,reverse=False):
+    """Free keyless RPC pool with failover (PublicNode first, Solana public RPC second). Wallet decoding uses the reverse order so it never starves curve polling."""
+    pool=CFG()["rpc_http_pool"][::-1] if reverse else CFG()["rpc_http_pool"]
+    if reverse:
+        for u in pool:
+            try:
+                async with HTTP[0].post(u,json={"jsonrpc":"2.0","id":1,"method":method,"params":params},timeout=aiohttp.ClientTimeout(total=timeout)) as r:
+                    if r.status==200:
+                        j=await r.json(content_type=None)
+                        if "result" in j:return j["result"]
+            except Exception:pass
+            break   # only the secondary endpoint for low-priority calls
+        return "429"
     for k in range(len(pool)):
         u=pool[(RPCI[0]+k)%len(pool)]
         try:
@@ -299,7 +309,9 @@ async def adopt(mint):
         if not c.graduated:return c
     COINS.pop(mint,None);CURVE.pop(mint,None);META.pop(mint,None);return None   # not a live pump.fun curve (graduated or other DEX)
 async def decode_wallet(w,sig):
-    tx=await rpc("getTransaction",[sig,{"encoding":"jsonParsed","maxSupportedTransactionVersion":0,"commitment":"confirmed"}],10)
+    if DECSEM.locked():STATS["w_skipped"]+=1;return
+    async with DECSEM:
+        tx=await rpc("getTransaction",[sig,{"encoding":"jsonParsed","maxSupportedTransactionVersion":0,"commitment":"confirmed"}],10,reverse=True);await asyncio.sleep(0.5)
     if not isinstance(tx,dict):STATS["w_txfail"]+=1;return
     meta=tx.get("meta") or {};chg=collections.defaultdict(float)
     for side,sgn in (("preTokenBalances",-1),("postTokenBalances",1)):
@@ -320,7 +332,7 @@ async def decode_wallet(w,sig):
         else:
             SELLSIG[mint][w]=ts;A["SCOUT"].live("☆",f"smart wallet {who} sold ${c.sym}")
             if holders(mint):A["SCOUT"].say("INFO",f"smart wallet {who} sold ${c.sym}",mint,c.sym);RISKMGR(mint,ts)
-SELLSIG=collections.defaultdict(dict);WDBG=collections.deque(maxlen=20)
+DECSEM=asyncio.Semaphore(2);SELLSIG=collections.defaultdict(dict);WDBG=collections.deque(maxlen=20)
 # ---------------- bots ----------------
 class Bot:
     def __init__(s,row):
