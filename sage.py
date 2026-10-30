@@ -70,6 +70,50 @@ async def jget(url,timeout=8):
             return await r.json(content_type=None)
     except Exception:return None
 RPCI=[0];RPCBAD=collections.Counter()
+HELIUS=os.environ.get("HELIUS_API_KEY","").strip()
+HEL_HTTP=f"https://mainnet.helius-rpc.com/?api-key={HELIUS}" if HELIUS else None
+HEL_WS=f"wss://mainnet.helius-rpc.com/?api-key={HELIUS}" if HELIUS else None
+HB=[0.0]   # Helius HTTP token bucket: <=0.25 req/s (~650k credits/month worst case), never above the 10 req/s plan limit
+WSLAST={}  # mint -> last websocket account update
+def helius_ok():
+    t=time.time()
+    if t-HB[0]>=4.0:HB[0]=t;return True
+    return False
+async def curve_ws():
+    """Helius websocket accountSubscribe on bonding curves (held + young/active coins): push updates instead of polling. Public polling stays as fallback."""
+    if not HEL_WS:return
+    while True:
+        subs={};pend={};rid=[100]
+        try:
+            async with websockets.connect(HEL_WS,ping_interval=20,ping_timeout=20,max_size=2**22) as ws:
+                STATS["hel_ws_conn"]+=1
+                async def sync():
+                    while True:
+                        t=time.time()
+                        want=[m for m in COINS if m in CURVE and (holders(m) or (not META[m].get("killed") and (t-COINS[m].born<180 or t-COINS[m].last_ts<60)))]
+                        want=sorted(want,key=lambda m:(not holders(m),-COINS[m].last_ts))[:CFG().get("helius_max_subs",150)]
+                        ws_=set(want)
+                        for m in list(subs):
+                            if m not in ws_:
+                                rid[0]+=1;await ws.send(json.dumps({"jsonrpc":"2.0","id":rid[0],"method":"accountUnsubscribe","params":[subs.pop(m)]}))
+                        for m in want:
+                            if m not in subs and m not in pend.values():
+                                rid[0]+=1;pend[rid[0]]=m;await ws.send(json.dumps({"jsonrpc":"2.0","id":rid[0],"method":"accountSubscribe","params":[CURVE[m],{"encoding":"base64","commitment":"processed"}]}))
+                                STATS["hel_subs"]+=1;await asyncio.sleep(0.12)   # ~8 msg/s max, under 10 req/s
+                        await asyncio.sleep(2)
+                task=asyncio.create_task(sync());bysub={}
+                try:
+                    async for raw in ws:
+                        STATS["hel_ws_bytes"]+=len(raw);j=json.loads(raw)
+                        if "id" in j and j.get("id") in pend:
+                            m=pend.pop(j["id"])
+                            if "result" in j:subs[m]=j["result"];bysub[j["result"]]=m
+                        elif j.get("method")=="accountNotification":
+                            p=j["params"];m=bysub.get(p["subscription"]);v=p["result"]["value"]
+                            if m and v and m in COINS:ts=time.time();WSLAST[m]=ts;STATS["hel_ws_msgs"]+=1;on_curve(m,v["data"][0],ts);WD["poll"]=ts
+                finally:task.cancel()
+        except Exception as e:STATS["hel_ws_err"]+=1
+        await asyncio.sleep(3)
 async def rpc(method,params,timeout=8,reverse=False):
     """Free keyless RPC pool with failover (PublicNode first, Solana public RPC second). Wallet decoding uses the reverse order so it never starves curve polling."""
     pool=CFG()["rpc_http_pool"][::-1] if reverse else CFG()["rpc_http_pool"]
@@ -92,6 +136,14 @@ async def rpc(method,params,timeout=8,reverse=False):
                     if "result" in j:RPCI[0]=(RPCI[0]+k)%len(pool);return j["result"]
                 RPCBAD[u]+=1
         except Exception:RPCBAD[u]+=1
+    if HEL_HTTP and not reverse and helius_ok():   # public pool failed: one rate-limited Helius call
+        try:
+            async with HTTP[0].post(HEL_HTTP,json={"jsonrpc":"2.0","id":1,"method":method,"params":params},timeout=aiohttp.ClientTimeout(total=timeout)) as r:
+                STATS["hel_http"]+=1
+                if r.status==200:
+                    j=await r.json(content_type=None)
+                    if "result" in j:return j["result"]
+        except Exception:pass
     return "429"
 def usd(sol):return sol*SOL[0]
 def mcap_usd(c):return c.mcap*SOL[0]
@@ -133,7 +185,7 @@ async def poller():
         t0=time.time()
         live=[m for m in COINS if m in CURVE and not META[m].get("killed") or holders(m)]
         n_=int(t0)
-        live=[m for m in live if m in CURVE and (holders(m) or t0-COINS[m].born<120 or t0-COINS[m].last_ts<60 or n_%5==0)]
+        live=[m for m in live if m in CURVE and (holders(m) or t0-COINS[m].born<120 or t0-COINS[m].last_ts<60 or n_%5==0) and t0-WSLAST.get(m,0)>5]
         ok=True
         for i in range(0,len(live),100):
             ch=live[i:i+100];res=await rpc("getMultipleAccounts",[[CURVE[m] for m in ch],{"encoding":"base64","commitment":"processed"}])
@@ -145,7 +197,8 @@ async def poller():
         elif not live:WD["poll"]=time.time()
         else:
             backoff=min(backoff+1,5)
-            if backoff==3:sc.say("INFO","RPC curve poll throttled; backing off")
+            if backoff==3:STATS["throttled"]+=1
+            if backoff==3 and time.time()-WD.get("thr_log",0)>600:WD["thr_log"]=time.time();sc.say("INFO",f"public RPC poll throttled ({STATS['throttled']} times total); Helius websocket covers {len(WSLAST)} curves")
         await asyncio.sleep(max(0.15,1.0-(time.time()-t0))+backoff*0.5)
 def on_curve(mint,b64,ts):
     c=COINS.get(mint);m=META.get(mint)
@@ -720,7 +773,7 @@ def stats():
         seen=STATS["seen"],killed=STATS["killed"],signals=STATS["signals"],buys=STATS["buys"],closed=STATS["closed"],stops=STATS["stops"],updates=STATS["updates"],
         watching=len(COINS),sol=SOL[0],uptime=int(time.time()-START),t0=kv("desk_t0",START),epoch=kv("epoch",0),next_evolve=kv("epoch_t0",time.time())+c["evolve_hours"]*3600,
         feeds=dict(pumpportal=bool(WS[0]),rpc_poll=time.time()-WD["poll"]<10),profile=c.get("profile"),sub=c["subscription"],
-        smart=len(SMART),copy_signals=STATS["copy_signals"],wdbg=dict(streams=STATS["w_streams"],drops=STATS["w_drops"],notif=STATS["w_notif"],pump=STATS["w_pump"],decoded=STATS["w_decoded"],txfail=STATS["w_txfail"],last=list(WDBG)[-5:]),today=STATS["day_"+dt.date.today().isoformat()],max_day=c.get("max_trades_day",50),replaced=STATS["replaced"])
+        smart=len(SMART),helius=dict(on=bool(HELIUS),ws_msgs=STATS["hel_ws_msgs"],subs=STATS["hel_subs"],http=STATS["hel_http"],ws_err=STATS["hel_ws_err"],ws_bytes=STATS["hel_ws_bytes"],conns=STATS["hel_ws_conn"],throttled=STATS["throttled"]),copy_signals=STATS["copy_signals"],wdbg=dict(streams=STATS["w_streams"],drops=STATS["w_drops"],notif=STATS["w_notif"],pump=STATS["w_pump"],decoded=STATS["w_decoded"],txfail=STATS["w_txfail"],last=list(WDBG)[-5:]),today=STATS["day_"+dt.date.today().isoformat()],max_day=c.get("max_trades_day",50),replaced=STATS["replaced"])
 def snapshot():
     return dict(board=board(),stats=stats(),agents=[a.view() for a in A.values()],server_now=time.time(),kills=KILLS.most_common(12),bots=bots_view(),tape=tape(),head=HEAD,
         equity=[list(r) for r in db.execute("select ts,equity from (select ts,equity from equity order by ts desc limit 1500) order by ts")],
@@ -864,5 +917,5 @@ async def main():
     app.router.add_get("/api/backtest",api_backtest);app.router.add_get("/api/evolutions",api_evolutions);app.router.add_get("/api/trades",api_trades);app.router.add_get("/api/equity",api_equity);app.router.add_get("/api/v9",api_v9);app.router.add_get("/api/v10",api_v10);app.router.add_get("/api/token",api_token);app.router.add_get("/api/eq2",api_eq2)
     run=web.AppRunner(app);await run.setup();await web.TCPSite(run,"0.0.0.0",int(os.environ.get("PORT","8787"))).start()
     A["RISK"].say("INFO",f"engine v9 up: {len(BOTS)} paper bots, epoch {kv('epoch',0)}",head=True)
-    await asyncio.gather(hub(),poller(),CD.bar_loop(HTTP[0]),CD.exit_loop(HTTP[0]),exec_loop(),dev_watch(),risk_clock(),evolution(),watchdog(),sol_price(),flusher(),EXEC.sweeper())
+    await asyncio.gather(hub(),poller(),curve_ws(),CD.bar_loop(HTTP[0]),CD.exit_loop(HTTP[0]),exec_loop(),dev_watch(),risk_clock(),evolution(),watchdog(),sol_price(),flusher(),EXEC.sweeper())
 if __name__=="__main__":asyncio.run(main())
