@@ -355,6 +355,7 @@ def load_bots():
                 c=strat.Coin(p["mint"],p["sym"],p["opened_ts"]-60,None,0,p["entry_mcap"]);COINS[p["mint"]]=c;CURVE[p["mint"]]=p["curve"];META[p["mint"]]=dict(sym=p["sym"],stage="held",series=[],last_reason=collections.Counter(),deep="ok")
     if not BOTS:seed()
     if not kv("v6"):migrate_v6()
+    if not kv("v7"):migrate_v7()
 def seed():
     """Generation 0: train-set winners from the replay backtest (bt_result.json) + live-only styles."""
     c=CFG();desk=c["start_equity"];r=json.load(open(f"{D}/bt_result.json")) if os.path.exists(f"{D}/bt_result.json") else {"bots":[]}
@@ -383,6 +384,29 @@ def migrate_v6():
     for i in range(9):new_bot(strat.copy_genome(rng),0,"seed",pool/10,"copy-trader: smart-wallet filters + analyst kills")
     kvset("v6",time.time());kvset("v6_start",pool);STATS["replaced"]=0
     A["RISK"].say("EVOLVE",f"Desk switched to copy-trading: 9 copy bots + 1 strict sniper, ${pool:.2f} carried over",head=True)
+def migrate_v7():
+    """Data-driven reallocation (owner asked for profitability): copy-trading had no out-of-sample edge in any test, so it is defunded to one
+    small observer bot. Capital goes to the backtest genomes that were positive on the HELD-OUT window (chosen by train score only)."""
+    pool=0
+    for b in list(BOTS.values()):
+        for mint,p in list(b.pos.items()):
+            c=COINS.get(mint);v=strat.sell_fill(c,p["tok"])*SOL[0] if c and SOL[0] else p["cost"]*0.5
+            b.cash+=v;db.execute("update bot_pos set tok=0,proceeds=proceeds+?,status='closed',closed=?,exit_reason='v7 reallocation' where id=?",(v,now(),p["id"]))
+        pool+=b.cash;db.execute("update bots set status='retired',died=?,cash=0 where id=?",(now(),b.id));BOTS.pop(b.id)
+    r=json.load(open(f"{D}/bt_result.json"))["bots"]
+    good=[x for x in r if x["holdout"]["n"]>=25 and x["holdout"]["mean"]>0.05 and x["train"]["mean"]>0]
+    good.sort(key=lambda x:-x["train"]["mean"])
+    rng=random.Random();alloc=[]
+    for x in good[:4]:
+        g=dict(x["genome"]);g["max_daily"]=8;g["size_pct"]=max(g["size_pct"],0.12)
+        alloc.append((g,0.8/max(1,len(good[:4])),f"held-out backtest: n={x['holdout']['n']} mean {x['holdout']['mean']:+.1%} (train {x['train']['mean']:+.1%})"))
+    sn=[x["genome"] for x in r if x["genome"]["style"]=="sniper"]
+    g=dict(sn[0]) if sn else strat.rand_genome("sniper",rng);g.update(style="sniper_strict",max_daily=4,size_pct=0.2,max_early=15,social=1)
+    alloc.append((g,0.12,"strict sniper (all checks)"))
+    cg=strat.copy_genome(rng);cg.update(consensus=2,size_pct=0.15,max_daily=3)
+    alloc.append((cg,0.08,"copy observer: copy-trading lost out-of-sample in every test, kept small to keep measuring"))
+    for g,w,note in alloc:new_bot(g,0,"v7 seed",pool*w,note)
+    kvset("v7",time.time());A["RISK"].say("EVOLVE",f"Reallocated ${pool:.2f}: {len(good[:4])} held-out-positive momentum/sniper bots (80%), strict sniper 12%, copy observer 8%",head=True)
 # ---------------- ANALYST ----------------
 def ANALYST(mint,ts):
     c=COINS.get(mint);m=META.get(mint)
@@ -449,8 +473,8 @@ class Executor:
         b=BOTS.get(o["bot"]);c=COINS.get(mint);ex=A["EXECUTOR"]
         if not b or not c or SOL[0]<=0:return
         if o["side"]=="buy":
-            usd_sz=min(b.cash,max(b.equity()*b.g["size_pct"],0.05*SOL[0]));sol=usd_sz/SOL[0]
-            if sol<0.049:return
+            usd_sz=min(b.cash,max(b.equity()*b.g["size_pct"],0.15*SOL[0]));sol=usd_sz/SOL[0]
+            if sol<0.1:return
             tok=strat.buy_fill(c,sol)
             if tok<=0:return
             b.cash-=usd_sz

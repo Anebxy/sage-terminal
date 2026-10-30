@@ -57,7 +57,7 @@ def mutate(g,rng=random,rate=0.3,scale=0.2):
     if rng.random()<0.05:g["style"]=rng.choice(STYLES[:3])
     return g
 def crossover(a,b,rng=random):
-    g={k:(a[k] if rng.random()<0.5 else b[k]) for k in RANGES};g["style"]=a["style"] if rng.random()<0.5 else b["style"];return g
+    g={k:(a.get(k,b.get(k,sum(RANGES[k])/2)) if rng.random()<0.5 else b.get(k,a.get(k,sum(RANGES[k])/2))) for k in RANGES};g["style"]=a["style"] if rng.random()<0.5 else b["style"];return g
 # ---------------- entry / exit logic (pure) ----------------
 def hard_kill(c,ts):
     """Shared kill-first rules (FILTER). Return reason or None. These are never relaxed by evolution."""
