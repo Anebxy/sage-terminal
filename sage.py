@@ -959,6 +959,22 @@ def v10view():
         watch=[dict(sym=c.sym,mint=m,mcap=round(c.mcap*SOL[0]),ch=round((c.mcap/c.hist[0][1]-1)*100,1) if c.hist else 0) for m,c in list(COINS.items())[-200:] if not META[m].get("killed") and META[m].get("deep")=="ok"][-8:][::-1],
         sol=SOL[0],ruggers=len(RUGGERS))
     return v
+async def api_archive(req):
+    """TEMPORARY (archive export): authenticated, read-only tar.gz of the /data disk. Consistent sqlite copies via backup API; secret-looking files skipped."""
+    import tarfile,tempfile,sqlite3 as _sq
+    tmp=tempfile.mkdtemp();out=f"{tmp}/data.tar.gz"
+    def build():
+        with tarfile.open(out,"w:gz") as t:
+            for root,dirs,files in os.walk(DATA):
+                for f in files:
+                    p=os.path.join(root,f);rel=os.path.relpath(p,DATA);lo=f.lower()
+                    if any(x in lo for x in("pass","key","secret",".env","token")):continue
+                    if f.endswith(".db"):
+                        cp=f"{tmp}/{f}";src=_sq.connect(p);dst=_sq.connect(cp);src.backup(dst);dst.close();src.close();t.add(cp,arcname=rel)
+                    elif f.endswith((".db-wal",".db-shm",".db-journal")):continue
+                    else:t.add(p,arcname=rel)
+    await asyncio.get_event_loop().run_in_executor(None,build)
+    return web.FileResponse(out,headers={"Content-Disposition":"attachment; filename=data.tar.gz","Cache-Control":"no-store"})
 async def api_v10(req):return web.json_response(v10view(),headers={"Cache-Control":"no-store"})
 async def api_token(req):
     mint=req.query.get("mint","");c=COINS.get(mint);m=META.get(mint)
@@ -993,7 +1009,7 @@ async def main():
     for n in ("manifest.json","icon-192.png","icon-512.png","icon-maskable-512.png","icon-1024.png","favicon-32.png","avatar.png","apple-touch-icon.png","favicon.ico"):app.router.add_get("/"+n,static(n))
     app.router.add_get("/sw.js",static("sw.js","application/javascript"))
     app.router.add_get("/",static("index.html"));app.router.add_get("/api/state",api_state);app.router.add_get("/api/stream",api_stream)
-    app.router.add_get("/api/backtest",api_backtest);app.router.add_get("/api/evolutions",api_evolutions);app.router.add_get("/api/trades",api_trades);app.router.add_get("/api/equity",api_equity);app.router.add_get("/api/v9",api_v9);app.router.add_get("/api/v10",api_v10);app.router.add_get("/api/token",api_token);app.router.add_get("/api/eq2",api_eq2)
+    app.router.add_get("/api/backtest",api_backtest);app.router.add_get("/api/evolutions",api_evolutions);app.router.add_get("/api/trades",api_trades);app.router.add_get("/api/equity",api_equity);app.router.add_get("/api/v9",api_v9);app.router.add_get("/api/v10",api_v10);app.router.add_get("/api/archive",api_archive);app.router.add_get("/api/token",api_token);app.router.add_get("/api/eq2",api_eq2)
     run=web.AppRunner(app);await run.setup();await web.TCPSite(run,"0.0.0.0",int(os.environ.get("PORT","8787"))).start()
     A["RISK"].say("INFO",f"engine v9 up: {len(BOTS)} paper bots, epoch {kv('epoch',0)}",head=True)
     await asyncio.gather(hub(),poller(),curve_ws(),nightly(),CD.bar_loop(HTTP[0]),CD.exit_loop(HTTP[0]),exec_loop(),dev_watch(),risk_clock(),evolution(),watchdog(),sol_price(),flusher(),EXEC.sweeper())
