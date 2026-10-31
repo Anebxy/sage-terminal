@@ -75,7 +75,19 @@ HEL_HTTP=f"https://mainnet.helius-rpc.com/?api-key={HELIUS}" if HELIUS else None
 HEL_WS=f"wss://mainnet.helius-rpc.com/?api-key={HELIUS}" if HELIUS else None
 HB=[0.0]   # Helius HTTP token bucket: <=0.25 req/s (~650k credits/month worst case), never above the 10 req/s plan limit
 WSLAST={}  # mint -> last websocket account update
+HUSE={}
+def hel_spend(credits):
+    """Daily Helius credit budget (persisted in the /data db). Credits per Helius docs: 1 per RPC call, 1 per WS connection, 2 per 0.1 MB streamed."""
+    d=ETday()
+    if HUSE.get("d")!=d:
+        u=kv("hel_used",{}) or {}
+        HUSE.clear();HUSE.update(d=d,used=u.get("used",0) if u.get("d")==d else 0,last=0)
+    HUSE["used"]+=credits
+    if time.time()-HUSE["last"]>30:HUSE["last"]=time.time();kvset("hel_used",dict(d=d,used=HUSE["used"]))
+def hel_left():
+    hel_spend(0);return CFG().get("helius_daily_credits",23000)-HUSE["used"]
 def helius_ok():
+    if hel_left()<=0:return False
     t=time.time()
     if t-HB[0]>=4.0:HB[0]=t;return True
     return False
@@ -84,7 +96,10 @@ async def curve_ws():
     if not HEL_WS:return
     while True:
         subs={};pend={};rid=[100]
+        if hel_left()<=0:
+            STATS["hel_budget_off"]+=1;A["SCOUT"].live("·","Helius daily credit budget used - public RPC only until midnight ET");await asyncio.sleep(300);continue
         try:
+            hel_spend(1)
             async with websockets.connect(HEL_WS,ping_interval=20,ping_timeout=20,max_size=2**22) as ws:
                 STATS["hel_ws_conn"]+=1
                 async def sync():
@@ -104,7 +119,9 @@ async def curve_ws():
                 task=asyncio.create_task(sync());bysub={}
                 try:
                     async for raw in ws:
-                        STATS["hel_ws_bytes"]+=len(raw);j=json.loads(raw)
+                        STATS["hel_ws_bytes"]+=len(raw);hel_spend(len(raw)*2/100000)
+                        if hel_left()<=0:A["SCOUT"].say("INFO","Helius daily credit budget reached - switching to public RPC until midnight ET");break
+                        j=json.loads(raw)
                         if "id" in j and j.get("id") in pend:
                             m=pend.pop(j["id"])
                             if "result" in j:subs[m]=j["result"];bysub[j["result"]]=m
@@ -138,6 +155,7 @@ async def rpc(method,params,timeout=8,reverse=False):
         except Exception:RPCBAD[u]+=1
     if HEL_HTTP and not reverse and helius_ok():   # public pool failed: one rate-limited Helius call
         try:
+            hel_spend(1)
             async with HTTP[0].post(HEL_HTTP,json={"jsonrpc":"2.0","id":1,"method":method,"params":params},timeout=aiohttp.ClientTimeout(total=timeout)) as r:
                 STATS["hel_http"]+=1
                 if r.status==200:
@@ -820,7 +838,7 @@ def stats():
         seen=STATS["seen"],killed=STATS["killed"],signals=STATS["signals"],buys=STATS["buys"],closed=STATS["closed"],stops=STATS["stops"],updates=STATS["updates"],
         watching=len(COINS),sol=SOL[0],uptime=int(time.time()-START),t0=kv("desk_t0",START),epoch=kv("epoch",0),next_evolve=kv("epoch_t0",time.time())+c["evolve_hours"]*3600,
         feeds=dict(pumpportal=bool(WS[0]),rpc_poll=time.time()-WD["poll"]<10),profile=c.get("profile"),sub=c["subscription"],
-        smart=len(SMART),helius=dict(on=bool(HELIUS),ws_msgs=STATS["hel_ws_msgs"],subs=STATS["hel_subs"],http=STATS["hel_http"],ws_err=STATS["hel_ws_err"],ws_bytes=STATS["hel_ws_bytes"],conns=STATS["hel_ws_conn"],throttled=STATS["throttled"]),copy_signals=STATS["copy_signals"],wdbg=dict(streams=STATS["w_streams"],drops=STATS["w_drops"],notif=STATS["w_notif"],pump=STATS["w_pump"],decoded=STATS["w_decoded"],txfail=STATS["w_txfail"],last=list(WDBG)[-5:]),today=STATS["day_"+dt.date.today().isoformat()],max_day=c.get("max_trades_day",50),replaced=STATS["replaced"])
+        smart=len(SMART),helius=dict(on=bool(HELIUS),ws_msgs=STATS["hel_ws_msgs"],subs=STATS["hel_subs"],http=STATS["hel_http"],ws_err=STATS["hel_ws_err"],ws_bytes=STATS["hel_ws_bytes"],conns=STATS["hel_ws_conn"],throttled=STATS["throttled"],credits_today=round(HUSE.get("used",0)),daily_budget=CFG().get("helius_daily_credits",23000),budget_left=round(hel_left())),copy_signals=STATS["copy_signals"],wdbg=dict(streams=STATS["w_streams"],drops=STATS["w_drops"],notif=STATS["w_notif"],pump=STATS["w_pump"],decoded=STATS["w_decoded"],txfail=STATS["w_txfail"],last=list(WDBG)[-5:]),today=STATS["day_"+dt.date.today().isoformat()],max_day=c.get("max_trades_day",50),replaced=STATS["replaced"])
 def snapshot():
     return dict(board=board(),stats=stats(),agents=[a.view() for a in A.values()],server_now=time.time(),kills=KILLS.most_common(12),bots=bots_view(),tape=tape(),head=HEAD,
         equity=[list(r) for r in db.execute("select ts,equity from (select ts,equity from equity order by ts desc limit 1500) order by ts")],
